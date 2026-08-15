@@ -77,10 +77,39 @@ def run_curation_cycle():
     museum_client = MuseumAPIClient()
     artwork = None
     
+    image_paths = None
     for attempt in range(1, 4):
         artwork = museum_client.get_random_artwork(posted_data, target_medium)
         if artwork:
-            break
+            logger.info(f"Seçilen Eser: '{artwork.title}' | Sanatçı: {artwork.artist} | Müze: {artwork.museum_name}")
+            logger.info(f"Görsel URL: {artwork.image_url}")
+            
+            if artwork.image_url:
+                main_img = image_processor.download_image(artwork.image_url)
+                if main_img:
+                    effect = random.choices(["none", "detail", "passepartout", "wallpaper"], weights=[50, 30, 10, 10], k=1)[0]
+                    
+                    if effect == "detail":
+                        detail_img = image_processor.crop_detail(main_img)
+                        image_paths = [main_img, detail_img] if detail_img else [main_img]
+                        logger.info("Detay kırpma (Photoset) uygulandı.")
+                    elif effect == "passepartout":
+                        framed_img = image_processor.add_passepartout(main_img)
+                        image_paths = [framed_img] if framed_img else [main_img]
+                        logger.info("Paspartu çerçeve eklendi.")
+                    elif effect == "wallpaper":
+                        wp_img = image_processor.create_wallpaper(main_img)
+                        image_paths = [wp_img] if wp_img else [main_img]
+                        logger.info("Duvar kağıdı formatına dönüştürüldü.")
+                    else:
+                        image_paths = [main_img]
+                    
+                    # Görsel başarıyla indirildi ve işlendi, döngüden çık
+                    break
+                else:
+                    logger.error("Görsel indirilemediği için bu eser atlanıyor, yeni bir eser aranacak...")
+                    artwork = None
+
         logger.warning(f"Deneme {attempt}/3 başarısız. 5 saniye sonra tekrar deneniyor...")
         import time
         time.sleep(5)
@@ -88,31 +117,6 @@ def run_curation_cycle():
     if not artwork:
         logger.error("Kürasyon döngüsü iptal: 3 denemenin ardından geçerli ve paylaşılmamış bir eser bulunamadı.")
         sys.exit(1)
-
-    logger.info(f"Seçilen Eser: '{artwork.title}' | Sanatçı: {artwork.artist} | Müze: {artwork.museum_name}")
-    logger.info(f"Görsel URL: {artwork.image_url}")
-
-    # Görseli İndir ve İşle (Feature 1, 19, 20)
-    image_paths = None
-    if artwork.image_url:
-        main_img = image_processor.download_image(artwork.image_url)
-        if main_img:
-            effect = random.choices(["none", "detail", "passepartout", "wallpaper"], weights=[50, 30, 10, 10], k=1)[0]
-            
-            if effect == "detail":
-                detail_img = image_processor.crop_detail(main_img)
-                image_paths = [main_img, detail_img] if detail_img else [main_img]
-                logger.info("Detay kırpma (Photoset) uygulandı.")
-            elif effect == "passepartout":
-                framed_img = image_processor.add_passepartout(main_img)
-                image_paths = [framed_img] if framed_img else [main_img]
-                logger.info("Paspartu çerçeve eklendi.")
-            elif effect == "wallpaper":
-                wp_img = image_processor.create_wallpaper(main_img)
-                image_paths = [wp_img] if wp_img else [main_img]
-                logger.info("Duvar kağıdı formatına dönüştürüldü.")
-            else:
-                image_paths = [main_img]
 
     # 3. Tumblr'a Gönder
     try:
