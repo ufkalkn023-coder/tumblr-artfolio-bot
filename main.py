@@ -11,6 +11,8 @@ from typing import Dict, List
 import config
 from museum_api import MuseumAPIClient, Artwork
 from tumblr_poster import TumblrPoster
+import image_processor
+from datetime import datetime
 
 logger = config.setup_logging()
 
@@ -27,7 +29,7 @@ def load_posted_ids() -> Dict[str, List[str]]:
         with open(config.POSTED_IDS_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
             # Tüm müze anahtarlarının varlığını garanti et
-            for key in ["met", "aic", "cma"]:
+            for key in ["met", "aic", "cma", "rijksmuseum"]:
                 if key not in data:
                     data[key] = []
             return data
@@ -62,7 +64,15 @@ def run_curation_cycle():
     mediums = list(config.CONTENT_WEIGHTS.keys())
     weights = list(config.CONTENT_WEIGHTS.values())
     target_medium = random.choices(mediums, weights=weights, k=1)[0]
-    logger.info(f"Rastgele belirlenen hedef eser türü: {target_medium}")
+    
+    # Feature 9: Tematik Günler (Zamanlanmış Yayın)
+    weekday = datetime.today().weekday()
+    if weekday == 0:  # Marble Monday
+        target_medium = "Sculpture"
+    elif weekday == 2:  # Watercolor Wednesday (veya genel Çizim)
+        target_medium = "Drawing"
+        
+    logger.info(f"Rastgele belirlenen hedef eser türü: {target_medium} (Gün: {weekday})")
 
     museum_client = MuseumAPIClient()
     artwork = None
@@ -82,6 +92,28 @@ def run_curation_cycle():
     logger.info(f"Seçilen Eser: '{artwork.title}' | Sanatçı: {artwork.artist} | Müze: {artwork.museum_name}")
     logger.info(f"Görsel URL: {artwork.image_url}")
 
+    # Görseli İndir ve İşle (Feature 1, 19, 20)
+    image_paths = None
+    if artwork.image_url:
+        main_img = image_processor.download_image(artwork.image_url)
+        if main_img:
+            effect = random.choices(["none", "detail", "passepartout", "wallpaper"], weights=[50, 30, 10, 10], k=1)[0]
+            
+            if effect == "detail":
+                detail_img = image_processor.crop_detail(main_img)
+                image_paths = [main_img, detail_img] if detail_img else [main_img]
+                logger.info("Detay kırpma (Photoset) uygulandı.")
+            elif effect == "passepartout":
+                framed_img = image_processor.add_passepartout(main_img)
+                image_paths = [framed_img] if framed_img else [main_img]
+                logger.info("Paspartu çerçeve eklendi.")
+            elif effect == "wallpaper":
+                wp_img = image_processor.create_wallpaper(main_img)
+                image_paths = [wp_img] if wp_img else [main_img]
+                logger.info("Duvar kağıdı formatına dönüştürüldü.")
+            else:
+                image_paths = [main_img]
+
     # 3. Tumblr'a Gönder
     try:
         poster = TumblrPoster()
@@ -89,7 +121,16 @@ def run_curation_cycle():
         logger.error(f"Tumblr istemcisi başlatılamadı: {e}")
         sys.exit(1)
 
-    success = poster.post_artwork(artwork)
+    success = poster.post_artwork(artwork, image_paths=image_paths)
+
+    # Geçici dosyaları temizle
+    if image_paths:
+        import os
+        for p in image_paths:
+            try:
+                os.remove(p)
+            except:
+                pass
 
     if success:
         # 4. State Güncelle ve Kaydet

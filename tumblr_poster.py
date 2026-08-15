@@ -4,11 +4,21 @@ Resim, Heykel, Çizim ve Değerli Objeler için dinamik SEO etiketleme ve açık
 """
 
 import re
+import random
 import logging
-from typing import List
+from typing import List, Optional
 import pytumblr
 from museum_api import Artwork
 import config
+
+QUESTIONS = [
+    "Sizce bu eserdeki en dikkat çekici detay nedir?",
+    "Bu eseri evinizin hangi odasına asardınız?",
+    "Eserdeki renk kullanımı size hangi duyguyu hissettiriyor?",
+    "Sizce karakterin gözlerindeki ifade ne anlatıyor?",
+    "Sanatçı burada ne anlatmak istemiş olabilir?",
+]
+
 
 logger = logging.getLogger("artfolio_bot.tumblr_poster")
 
@@ -55,6 +65,11 @@ class TumblrPoster:
         ]
             
         caption_lines.append(f"<p>{config.INSTAGRAM_CALLOUT}</p>")
+        
+        # Günün sorusu ekle
+        question = random.choice(QUESTIONS)
+        caption_lines.append(f"<br><p><i>{question}</i></p>")
+        
         return "".join(caption_lines)
 
     def generate_tags(self, artwork: Artwork) -> List[str]:
@@ -103,9 +118,10 @@ class TumblrPoster:
 
         return unique_tags[:5]
 
-    def post_artwork(self, artwork: Artwork) -> bool:
+    def post_artwork(self, artwork: Artwork, image_paths: Optional[List[str]] = None) -> bool:
         """
         Sanat eserini Tumblr blogunda fotoğraf postu olarak paylaşır.
+        Eğer image_paths verilirse o dosyaları, verilmezse görsel linkini kullanır.
         """
         caption = self.format_caption(artwork)
         tags = self.generate_tags(artwork)
@@ -114,13 +130,18 @@ class TumblrPoster:
         logger.info(f"Kullanılan etiketler (Tam 5 adet): {tags}")
 
         try:
-            response = self.client.create_photo(
-                self.blog_name,
-                state="published",
-                source=artwork.image_url,
-                caption=caption,
-                tags=tags
-            )
+            kwargs = {
+                "state": "published",
+                "caption": caption,
+                "tags": tags
+            }
+            if artwork.alt_text:
+                kwargs["alt_text"] = artwork.alt_text
+
+            if image_paths and len(image_paths) > 0:
+                response = self.client.create_photo(self.blog_name, data=image_paths, **kwargs)
+            else:
+                response = self.client.create_photo(self.blog_name, source=artwork.image_url, **kwargs)
 
             if isinstance(response, dict) and "id" in response:
                 post_id = response["id"]

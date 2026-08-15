@@ -47,6 +47,7 @@ class Artwork:
     raw_medium: str       # Ham teknik/malzeme bilgisi (örn: "Oil on canvas", "Bronze", "Marble")
     score: int            # 0 - 100 arası kalite puanı
     style_or_era: Optional[str] = None  # Dönem veya akım bilgisi
+    alt_text: str = ""    # Görme engelliler ve SEO için alternatif metin
 
 
 class ArtworkScorer:
@@ -270,7 +271,8 @@ class MuseumAPIClient:
                         medium_type=medium_type,
                         raw_medium=raw_medium,
                         score=score,
-                        style_or_era=department
+                        style_or_era=department,
+                        alt_text=f"{title} by {artist}. {raw_medium}. {department}."
                     )
 
         except Exception as e:
@@ -394,7 +396,8 @@ class MuseumAPIClient:
                         medium_type=medium_type,
                         raw_medium=raw_medium,
                         score=score,
-                        style_or_era=style_title
+                        style_or_era=style_title,
+                        alt_text=f"{title} by {artist}. {raw_medium}."
                     )
 
         except Exception as e:
@@ -499,7 +502,8 @@ class MuseumAPIClient:
                         medium_type=medium_type,
                         raw_medium=raw_medium,
                         score=score,
-                        style_or_era=culture
+                        style_or_era=culture,
+                        alt_text=f"{title} by {artist}. {raw_medium}. {item.get('description', '')[:100]}"
                     )
 
         except Exception as e:
@@ -632,7 +636,8 @@ class MuseumAPIClient:
                         medium_type=medium_type,
                         raw_medium=raw_medium,
                         score=score,
-                        style_or_era="Dutch Art"
+                        style_or_era="Dutch Art",
+                        alt_text=f"{title} by {artist}. {raw_medium}. {detail_data.get('description', '')[:100]}"
                     )
 
         except Exception as e:
@@ -651,7 +656,8 @@ class MuseumAPIClient:
         museum_fetchers = [
             ("met", self.fetch_met_artwork),
             ("aic", self.fetch_aic_artwork),
-            ("cma", self.fetch_cma_artwork)
+            ("cma", self.fetch_cma_artwork),
+            ("rijksmuseum", self.fetch_rijksmuseum_artwork)
         ]
 
         random.shuffle(museum_fetchers)
