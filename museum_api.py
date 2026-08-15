@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from typing import Optional, Dict, List, Set, Tuple
 import requests
 
+import config
+
 logger = logging.getLogger("artfolio_bot.museum_api")
 
 HTTP_TIMEOUT = 20
@@ -176,10 +178,20 @@ class MuseumAPIClient:
     # ----------------------------------------------------------------------
     # 1. The Metropolitan Museum of Art (The Met)
     # ----------------------------------------------------------------------
-    def fetch_met_artwork(self, posted_ids: Set[str]) -> Optional[Artwork]:
+    def fetch_met_artwork(self, posted_ids: Set[str], target_medium: str = None) -> Optional[Artwork]:
         """The Met API'den 85+ puanlı kamu malı resim, heykel, çizim veya obje seçer."""
-        logger.info("The Met API taranıyor (Resim, Heykel, Çizim, Başyapıtlar)...")
+        logger.info(f"The Met API taranıyor (Hedef: {target_medium or 'Karışık'})...")
+        
         search_terms = ["masterpiece", "portrait", "sculpture", "painting", "drawing", "renaissance", "marble", "bronze"]
+        if target_medium == "Painting":
+            search_terms = ["painting", "portrait", "oil on canvas", "fresco"]
+        elif target_medium == "Sculpture":
+            search_terms = ["sculpture", "statue", "marble", "bronze"]
+        elif target_medium == "Drawing":
+            search_terms = ["drawing", "sketch", "watercolor", "ink on paper"]
+        elif target_medium == "Object":
+            search_terms = ["artifact", "vase", "jewelry", "armor", "pottery", "sword"]
+            
         query = random.choice(search_terms)
 
         search_url = "https://collectionapi.metmuseum.org/public/collection/v1/search"
@@ -269,10 +281,25 @@ class MuseumAPIClient:
     # ----------------------------------------------------------------------
     # 2. Art Institute of Chicago (AIC)
     # ----------------------------------------------------------------------
-    def fetch_aic_artwork(self, posted_ids: Set[str]) -> Optional[Artwork]:
+    def fetch_aic_artwork(self, posted_ids: Set[str], target_medium: str = None) -> Optional[Artwork]:
         """Art Institute of Chicago API'den 85+ puanlı eser seçer."""
-        logger.info("Art Institute of Chicago (AIC) API taranıyor...")
+        logger.info(f"Art Institute of Chicago (AIC) API taranıyor (Hedef: {target_medium or 'Karışık'})...")
         search_url = "https://api.artic.edu/api/v1/artworks/search"
+
+        should_matches = [
+            {"match": {"artwork_type_title": "Painting"}},
+            {"match": {"artwork_type_title": "Sculpture"}},
+            {"match": {"artwork_type_title": "Drawing and Watercolor"}}
+        ]
+        
+        if target_medium == "Painting":
+            should_matches = [{"match": {"artwork_type_title": "Painting"}}]
+        elif target_medium == "Sculpture":
+            should_matches = [{"match": {"artwork_type_title": "Sculpture"}}]
+        elif target_medium == "Drawing":
+            should_matches = [{"match": {"artwork_type_title": "Drawing and Watercolor"}}]
+        elif target_medium == "Object":
+            should_matches = [{"match": {"artwork_type_title": "Decorative Arts"}}, {"match": {"artwork_type_title": "Vessels"}}]
 
         random_page = random.randint(1, 30)
         payload = {
@@ -281,11 +308,7 @@ class MuseumAPIClient:
                     "must": [
                         {"term": {"is_public_domain": True}}
                     ],
-                    "should": [
-                        {"match": {"artwork_type_title": "Painting"}},
-                        {"match": {"artwork_type_title": "Sculpture"}},
-                        {"match": {"artwork_type_title": "Drawing and Watercolor"}}
-                    ],
+                    "should": should_matches,
                     "minimum_should_match": 1
                 }
             },
@@ -382,9 +405,9 @@ class MuseumAPIClient:
     # ----------------------------------------------------------------------
     # 3. Cleveland Museum of Art (CMA)
     # ----------------------------------------------------------------------
-    def fetch_cma_artwork(self, posted_ids: Set[str]) -> Optional[Artwork]:
+    def fetch_cma_artwork(self, posted_ids: Set[str], target_medium: str = None) -> Optional[Artwork]:
         """Cleveland Museum of Art Açık Erişim API'sinden 85+ puanlı eser seçer."""
-        logger.info("Cleveland Museum of Art (CMA) API taranıyor...")
+        logger.info(f"Cleveland Museum of Art (CMA) API taranıyor (Hedef: {target_medium or 'Karışık'})...")
         search_url = "https://openaccess-api.clevelandart.org/api/artworks/"
 
         random_skip = random.randint(0, 30) * 40
@@ -394,6 +417,15 @@ class MuseumAPIClient:
             "limit": 40,
             "skip": random_skip
         }
+        
+        if target_medium == "Painting":
+            params["type"] = "Painting"
+        elif target_medium == "Sculpture":
+            params["type"] = "Sculpture"
+        elif target_medium == "Drawing":
+            params["type"] = "Drawing"
+        elif target_medium == "Object":
+            params["type"] = "Decorative Art"
 
         try:
             resp = self.session.get(search_url, params=params, timeout=HTTP_TIMEOUT)
@@ -476,11 +508,145 @@ class MuseumAPIClient:
         return None
 
     # ----------------------------------------------------------------------
+    # 4. Rijksmuseum (Amsterdam)
+    # ----------------------------------------------------------------------
+    def fetch_rijksmuseum_artwork(self, posted_ids: Set[str], target_medium: str = None) -> Optional[Artwork]:
+        """Rijksmuseum API'sinden 85+ puanlı eser seçer."""
+        if not config.RIJKSMUSEUM_API_KEY:
+            logger.warning("Rijksmuseum API anahtarı (RIJKSMUSEUM_API_KEY) tanımlanmamış, atlanıyor.")
+            return None
+
+        logger.info(f"Rijksmuseum API taranıyor (Hedef: {target_medium or 'Karışık'})...")
+        search_url = "https://www.rijksmuseum.nl/api/en/collection"
+        
+        q_param = ""
+        if target_medium == "Painting":
+            q_param = "painting"
+        elif target_medium == "Sculpture":
+            q_param = "sculpture"
+        elif target_medium == "Drawing":
+            q_param = "drawing"
+        elif target_medium == "Object":
+            q_param = "object"
+            
+        random_page = random.randint(1, 100)
+        params = {
+            "key": config.RIJKSMUSEUM_API_KEY,
+            "format": "json",
+            "imgonly": "True",
+            "ps": 20,
+            "p": random_page,
+            "s": "relevance",
+        }
+        if q_param:
+            params["q"] = q_param
+
+        try:
+            resp = self.session.get(search_url, params=params, timeout=HTTP_TIMEOUT)
+            if resp.status_code != 200:
+                logger.warning(f"Rijksmuseum arama hatası: HTTP {resp.status_code}")
+                return None
+
+            data = resp.json()
+            artworks = data.get("artObjects", [])
+            if not artworks:
+                return None
+
+            random.shuffle(artworks)
+
+            for item in artworks:
+                artwork_id = item.get("objectNumber")
+                if not artwork_id or artwork_id in posted_ids:
+                    continue
+
+                if not item.get("hasImage"):
+                    continue
+                    
+                image_url = ""
+                if item.get("webImage") and item["webImage"].get("url"):
+                    image_url = item["webImage"]["url"]
+                
+                if not image_url:
+                    continue
+
+                title = item.get("title", "Untitled").strip() or "Untitled"
+                artist = item.get("principalOrFirstMaker", "Unknown Artist").strip() or "Unknown Artist"
+                
+                long_title = item.get("longTitle", "")
+                date_str = "Unknown Date"
+                if long_title:
+                    date_str = long_title.split(",")[-1].strip()
+
+                detail_url = f"https://www.rijksmuseum.nl/api/en/collection/{artwork_id}"
+                detail_params = {"key": config.RIJKSMUSEUM_API_KEY, "format": "json"}
+                detail_resp = self.session.get(detail_url, params=detail_params, timeout=HTTP_TIMEOUT)
+                
+                raw_medium = ""
+                classification = ""
+                object_name = ""
+                on_view = False
+
+                if detail_resp.status_code == 200:
+                    detail_data = detail_resp.json().get("artObject", {})
+                    
+                    dating = detail_data.get("dating", {})
+                    if dating and dating.get("presentingDate"):
+                        date_str = dating.get("presentingDate")
+                    
+                    materials = detail_data.get("materials", [])
+                    raw_medium = ", ".join(materials) if materials else ""
+                    
+                    object_types = detail_data.get("objectTypes", [])
+                    object_name = ", ".join(object_types) if object_types else ""
+                    
+                    location = detail_data.get("location", "")
+                    on_view = bool(location)
+
+                # Puanlama
+                score, log_summary = ArtworkScorer.calculate_score(
+                    title=title,
+                    artist=artist,
+                    date_str=date_str,
+                    raw_medium=raw_medium,
+                    classification=classification,
+                    object_name=object_name,
+                    image_url=image_url,
+                    is_highlight=False,
+                    has_additional_images=False,
+                    on_view=on_view
+                )
+
+                logger.debug(f"Rijksmuseum ID {artwork_id} Değerlendirmesi: {log_summary}")
+
+                if score >= MINIMUM_QUALITY_SCORE:
+                    medium_type = ArtworkScorer.classify_medium(raw_medium, classification, object_name)
+                    logger.info(f"✓ Rijksmuseum Eseri Onaylandı ({score}/100): '{title}' by {artist} [{medium_type}]")
+                    return Artwork(
+                        museum="rijksmuseum",
+                        id=artwork_id,
+                        title=title,
+                        artist=artist,
+                        date=date_str,
+                        image_url=image_url,
+                        museum_name="Rijksmuseum, Amsterdam",
+                        medium_type=medium_type,
+                        raw_medium=raw_medium,
+                        score=score,
+                        style_or_era="Dutch Art"
+                    )
+
+        except Exception as e:
+            logger.error(f"Rijksmuseum API işleminde hata: {e}")
+
+        return None
+
+    # ----------------------------------------------------------------------
     # Rastgele Müze Seçimi ve Fallback Orkestrasyonu
     # ----------------------------------------------------------------------
-    def get_random_artwork(self, posted_ids_by_museum: Dict[str, List[str]]) -> Optional[Artwork]:
+    def get_random_artwork(self, posted_ids_by_museum: Dict[str, List[str]], target_medium: str = None) -> Optional[Artwork]:
         """
         Müzeler arasında rastgele seçim yapar. Yalnızca 85+ puan alan eserleri kabul eder.
+        Eğer target_medium belirtilmişse o kategoriye ağırlık verir.
         """
         museum_fetchers = [
             ("met", self.fetch_met_artwork),
@@ -492,8 +658,12 @@ class MuseumAPIClient:
 
         for museum_key, fetcher_func in museum_fetchers:
             posted_set = set(posted_ids_by_museum.get(museum_key, []))
-            artwork = fetcher_func(posted_set)
+            artwork = fetcher_func(posted_set, target_medium)
             if artwork and artwork.score >= MINIMUM_QUALITY_SCORE:
+                # Eser türü uyuşmazlığına karşı ek bir kontrol
+                if target_medium and artwork.medium_type != target_medium:
+                    logger.warning(f"Bulunan eser ({artwork.medium_type}) hedeflenen tür ({target_medium}) ile uyuşmadı, bir sonraki müzeye geçiliyor.")
+                    continue
                 return artwork
             logger.warning(f"{museum_key.upper()} üzerinden 85+ puanlı eser arayışı devam ediyor...")
 

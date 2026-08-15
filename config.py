@@ -21,12 +21,24 @@ TUMBLR_OAUTH_TOKEN = os.getenv("TUMBLR_OAUTH_TOKEN", "").strip()
 TUMBLR_OAUTH_SECRET = os.getenv("TUMBLR_OAUTH_SECRET", "").strip()
 TUMBLR_BLOG_NAME = os.getenv("TUMBLR_BLOG_NAME", "").strip()
 
+# Rijksmuseum API
+# Kullanıcı özel bir key girmezse, bilinen bir public (açık) anahtarı ('0fiuZFhW') varsayılan olarak kullanır.
+RIJKSMUSEUM_API_KEY = os.getenv("RIJKSMUSEUM_API_KEY", "0fiuZFhW").strip()
+
 # Çapraz Yönlendirme Metni
 INSTAGRAM_CALLOUT = "Follow on Instagram for more: @artfolio.db"
 
 # Tumblr SEO Etiketleri (Tam 5 adet olacak şekilde dinamik olarak tamamlanır)
 DEFAULT_TAGS = ["art", "classical art", "oil painting", "museum"]
 FALLBACK_TAG = "fine art"
+
+# İçerik Türü Ağırlıkları (Yüzde Oranları)
+CONTENT_WEIGHTS = {
+    "Painting": 85,
+    "Sculpture": 10,
+    "Drawing": 5,
+    "Object": 0
+}
 
 # Loglama Yapılandırması
 def setup_logging():

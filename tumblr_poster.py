@@ -39,13 +39,11 @@ class TumblrPoster:
         if missing:
             raise ValueError(f"Eksik Tumblr API kimlik bilgileri: {', '.join(missing)}")
 
-    def format_caption(self, artwork: Artwork, palette_html: str = "") -> str:
+    def format_caption(self, artwork: Artwork) -> str:
         """
-        Eser bilgilerini, teknik türünü, renk paletini ve Instagram çağrısını içeren HTML açıklama üretir.
+        Eser bilgilerini kullanarak (ve varsa renk paleti HTML'i ekleyerek) post açıklamasını oluşturur.
         """
-        medium_info = artwork.medium_type
-        if artwork.raw_medium and len(artwork.raw_medium) <= 60:
-            medium_info = f"{artwork.medium_type} ({artwork.raw_medium})"
+        medium_info = f"{artwork.medium_type} ({artwork.raw_medium})" if artwork.raw_medium else artwork.medium_type
 
         caption_lines = [
             f"<p><b>Title:</b> {artwork.title}</p>",
@@ -55,10 +53,6 @@ class TumblrPoster:
             f"<p><b>Museum:</b> {artwork.museum_name}</p>",
             "<br>"
         ]
-        
-        if palette_html:
-            caption_lines.append(palette_html)
-            caption_lines.append("<br>")
             
         caption_lines.append(f"<p>{config.INSTAGRAM_CALLOUT}</p>")
         return "".join(caption_lines)
@@ -113,13 +107,7 @@ class TumblrPoster:
         """
         Sanat eserini Tumblr blogunda fotoğraf postu olarak paylaşır.
         """
-        from color_extractor import get_dominant_colors, format_palette_html
-        
-        logger.info("Görselden renk paleti analiz ediliyor...")
-        hex_colors = get_dominant_colors(artwork.image_url)
-        palette_html = format_palette_html(hex_colors)
-        
-        caption = self.format_caption(artwork, palette_html)
+        caption = self.format_caption(artwork)
         tags = self.generate_tags(artwork)
 
         logger.info(f"Tumblr gönderisi hazırlanıyor: '{artwork.title}' [{artwork.medium_type}, Score: {artwork.score}/100]")

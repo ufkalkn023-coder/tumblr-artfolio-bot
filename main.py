@@ -56,11 +56,19 @@ def run_curation_cycle():
     logger.info(f"Hafızada toplam {total_posted} önceden paylaşılmış eser kayıtlı.")
 
     # 2. Müzelerden Uygun Eser Çek (Hata payına karşı 3 defa deneme)
+    import random
+    
+    # Hedef tür belirleme (Yüzdelik oranlara göre)
+    mediums = list(config.CONTENT_WEIGHTS.keys())
+    weights = list(config.CONTENT_WEIGHTS.values())
+    target_medium = random.choices(mediums, weights=weights, k=1)[0]
+    logger.info(f"Rastgele belirlenen hedef eser türü: {target_medium}")
+
     museum_client = MuseumAPIClient()
     artwork = None
     
     for attempt in range(1, 4):
-        artwork = museum_client.get_random_artwork(posted_data)
+        artwork = museum_client.get_random_artwork(posted_data, target_medium)
         if artwork:
             break
         logger.warning(f"Deneme {attempt}/3 başarısız. 5 saniye sonra tekrar deneniyor...")
