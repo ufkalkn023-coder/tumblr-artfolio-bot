@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Sanal Ortam
+venv/
+env/
+ENV/
+.venv/
+
+# Çevre Değişkenleri ve Gizli Anahtarlar
+.env
+.env.local
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+*.log
