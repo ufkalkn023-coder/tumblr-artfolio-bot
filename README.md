@@ -14,7 +14,6 @@ GitHub Actions üzerinde sıfır maliyetle çalışan, günde 48 adet (her 30 da
   - Tür & malzeme kalitesi (Yağlı boya, mermer, bronz, altın, usta eskiz) (Maks 20 puan)
   - Başlık & tarih bütünlüğü (Maks 5 puan)
   - *Kırık/değersiz arkeolojik fragmanlar, çizikler, madeni paralar otomatik olarak elenir.*
-- **Otomatik Renk Paleti Çıkarımı (Color Palette):** `Pillow` kullanılarak her eserin en baskın 5 rengi analiz edilir ve açıklama kısmına çok şık bir renk bloğu / hex kodu paleti olarak (`Palette: █ #HEX`) eklenir. Tasarımcılar ve moodboard kitleleri için viral/reblog etkisini artırır.
 - **Çoklu Sanat Türü Desteği:** Resimler (`Painting`), Heykeller (`Sculpture`), Usta Çizimleri (`Drawing`) ve Değerli Objeler (`Object`).
 - **Tekrar Önleme (State Management):** Paylaşılan eserlerin ID'leri `posted_ids.json` dosyasında tutulur ve GitHub Actions her paylaşımdan sonra bu dosyayı depoya otomatik commit/push eder.
 - **Tumblr SEO:** Türüne göre optimize edilmiş **tam 5 adet** hedeflenmiş etiket eklenir (örn: `#art`, `#classical art`, `#sculpture`, `#museum`, `#classical sculpture`).
@@ -41,29 +40,3 @@ GitHub Actions üzerinde sıfır maliyetle çalışan, günde 48 adet (her 30 da
 └── README.md                # Kurulum ve kullanım kılavuzu
 ```
 
----
-
-## 🔑 Tumblr API Anahtarlarını Alma
-
-1. [Tumblr Applications](https://www.tumblr.com/oauth/apps) sayfasına gidin ve **"Register an Application"** butonuna tıklayın.
-2. Uygulama oluşturduktan sonra size verilen `OAuth Consumer Key` ve `OAuth Consumer Secret` bilgilerini alın.
-3. Kullanıcı yetkilendirmesi ile `OAuth Token` ve `OAuth Token Secret` değerlerini elde edin.
-
----
-
-## ⚙️ GitHub Secrets Yapılandırması
-
-Projeyi GitHub'a yükledikten sonra:
-1. GitHub Deponuz > **Settings** > **Secrets and variables** > **Actions** sayfasına gidin.
-2. **New repository secret** butonuna tıklayarak aşağıdaki 5 gizli anahtarı ekleyin:
-
-| Secret Adı | Açıklama |
-| :--- | :--- |
-| `TUMBLR_CONSUMER_KEY` | Tumblr OAuth Consumer Key |
-| `TUMBLR_CONSUMER_SECRET` | Tumblr OAuth Consumer Secret |
-| `TUMBLR_OAUTH_TOKEN` | Tumblr OAuth Token |
-| `TUMBLR_OAUTH_SECRET` | Tumblr OAuth Token Secret |
-| `TUMBLR_BLOG_NAME` | Paylaşım yapılacak blog adı (örn: `artfolio-db.tumblr.com`) |
-
-3. **Workflow İzinleri:**
-   - **Settings** > **Actions** > **General** > **Workflow permissions** altında **"Read and write permissions"** seçeneğini işaretleyin.
