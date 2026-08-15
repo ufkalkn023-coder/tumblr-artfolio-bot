@@ -656,8 +656,7 @@ class MuseumAPIClient:
         museum_fetchers = [
             ("met", self.fetch_met_artwork),
             ("aic", self.fetch_aic_artwork),
-            ("cma", self.fetch_cma_artwork),
-            ("rijksmuseum", self.fetch_rijksmuseum_artwork)
+            ("cma", self.fetch_cma_artwork)
         ]
 
         random.shuffle(museum_fetchers)

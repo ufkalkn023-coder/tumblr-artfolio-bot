@@ -129,14 +129,16 @@ class TumblrPoster:
         logger.info(f"Tumblr gönderisi hazırlanıyor: '{artwork.title}' [{artwork.medium_type}, Score: {artwork.score}/100]")
         logger.info(f"Kullanılan etiketler (Tam 5 adet): {tags}")
 
+        if artwork.alt_text:
+            # PyTumblr doğrudan alt_text kwarg'ını desteklemediği için caption'a görünmez/küçük bir not olarak ekliyoruz
+            caption += f'<br><p style="font-size: 10px; color: #888;">[Image description: {artwork.alt_text}]</p>'
+
         try:
             kwargs = {
                 "state": "published",
                 "caption": caption,
                 "tags": tags
             }
-            if artwork.alt_text:
-                kwargs["alt_text"] = artwork.alt_text
 
             if image_paths and len(image_paths) > 0:
                 response = self.client.create_photo(self.blog_name, data=image_paths, **kwargs)
