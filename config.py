@@ -25,6 +25,9 @@ TUMBLR_BLOG_NAME = os.getenv("TUMBLR_BLOG_NAME", "").strip()
 # Kullanıcı özel bir key girmezse, bilinen bir public (açık) anahtarı ('0fiuZFhW') varsayılan olarak kullanır.
 RIJKSMUSEUM_API_KEY = os.getenv("RIJKSMUSEUM_API_KEY", "0fiuZFhW").strip()
 
+# Harvard Art Museums API
+HARVARD_API_KEY = os.getenv("HARVARD_API_KEY", "").strip()
+
 # Çapraz Yönlendirme Metni
 INSTAGRAM_CALLOUT = "Follow on Instagram for more: @artfolio.db"
 

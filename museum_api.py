@@ -16,7 +16,7 @@ logger = logging.getLogger("artfolio_bot.museum_api")
 
 HTTP_TIMEOUT = 20
 USER_AGENT = "artfolio-bot/1.0 (Tumblr Art Curation Bot)"
-MINIMUM_QUALITY_SCORE = 85
+MINIMUM_QUALITY_SCORE = 60
 
 # Dünya çapında tanınan usta sanatçılar listesi (Puanlama bonusu için)
 FAMOUS_ARTISTS = {
@@ -61,11 +61,11 @@ class ArtworkScorer:
         """Eserin türünü belirler: Painting, Sculpture, Drawing veya Object."""
         text = f"{raw_medium} {classification} {object_name}".lower()
         
-        if any(w in text for w in ["painting", "oil on canvas", "tempera", "fresco", "acrylic", "panel"]):
+        if any(w in text for w in ["painting", "oil on canvas", "tempera", "fresco", "acrylic", "panel", "maleri", "olie på lærred"]):
             return "Painting"
-        if any(w in text for w in ["sculpture", "statue", "marble", "bronze", "terracotta", "bust", "relief", "alabaster"]):
+        if any(w in text for w in ["sculpture", "statue", "marble", "bronze", "terracotta", "bust", "relief", "alabaster", "skulptur"]):
             return "Sculpture"
-        if any(w in text for w in ["drawing", "ink on paper", "chalk", "charcoal", "pastel", "etching", "engraving", "woodcut", "watercolor", "print"]):
+        if any(w in text for w in ["drawing", "ink on paper", "chalk", "charcoal", "pastel", "etching", "engraving", "woodcut", "watercolor", "print", "tegning", "grafik", "træsnit", "radering"]):
             return "Drawing"
         return "Object"
 
@@ -512,137 +512,184 @@ class MuseumAPIClient:
         return None
 
     # ----------------------------------------------------------------------
-    # 4. Rijksmuseum (Amsterdam)
+    # 4. Statens Museum for Kunst (SMK) - Kopenhag
     # ----------------------------------------------------------------------
-    def fetch_rijksmuseum_artwork(self, posted_ids: Set[str], target_medium: str = None) -> Optional[Artwork]:
-        """Rijksmuseum API'sinden 85+ puanlı eser seçer."""
-        if not config.RIJKSMUSEUM_API_KEY:
-            logger.warning("Rijksmuseum API anahtarı (RIJKSMUSEUM_API_KEY) tanımlanmamış, atlanıyor.")
-            return None
-
-        logger.info(f"Rijksmuseum API taranıyor (Hedef: {target_medium or 'Karışık'})...")
-        search_url = "https://www.rijksmuseum.nl/api/en/collection"
+    def fetch_smk_artwork(self, posted_ids: Set[str], target_medium: str = None) -> Optional[Artwork]:
+        """SMK (Danimarka) API'sinden eser seçer (API Key gerektirmez)."""
+        logger.info(f"SMK (Statens Museum for Kunst) API taranıyor (Hedef: {target_medium or 'Karışık'})...")
         
-        q_param = ""
+        search_url = "https://api.smk.dk/api/v1/art/search"
+        random_offset = random.randint(0, 1000)
+        
+        q_param = "*"
         if target_medium == "Painting":
-            q_param = "painting"
+            q_param = "maleri"
         elif target_medium == "Sculpture":
-            q_param = "sculpture"
+            q_param = "skulptur"
         elif target_medium == "Drawing":
-            q_param = "drawing"
-        elif target_medium == "Object":
-            q_param = "object"
-            
-        random_page = random.randint(1, 100)
+            q_param = "tegning"
+        
         params = {
-            "key": config.RIJKSMUSEUM_API_KEY,
-            "format": "json",
-            "imgonly": "True",
-            "ps": 20,
-            "p": random_page,
-            "s": "relevance",
+            "keys": q_param,
+            "filters": "has_image:true,public_domain:true",
+            "offset": random_offset,
+            "rows": 100
         }
-        if q_param:
-            params["q"] = q_param
 
         try:
             resp = self.session.get(search_url, params=params, timeout=HTTP_TIMEOUT)
             if resp.status_code != 200:
-                logger.warning(f"Rijksmuseum arama hatası: HTTP {resp.status_code}")
+                logger.warning(f"SMK arama hatası: HTTP {resp.status_code}")
                 return None
 
             data = resp.json()
-            artworks = data.get("artObjects", [])
+            artworks = data.get("items", [])
             if not artworks:
                 return None
 
             random.shuffle(artworks)
 
             for item in artworks:
-                artwork_id = item.get("objectNumber")
+                artwork_id = str(item.get("object_number", ""))
                 if not artwork_id or artwork_id in posted_ids:
                     continue
 
-                if not item.get("hasImage"):
-                    continue
-                    
-                image_url = ""
-                if item.get("webImage") and item["webImage"].get("url"):
-                    image_url = item["webImage"]["url"]
-                
+                image_url = item.get("image_native")
+                if not image_url:
+                    image_url = item.get("image_thumbnail", "").replace("!1024", "full")
                 if not image_url:
                     continue
 
-                title = item.get("title", "Untitled").strip() or "Untitled"
-                artist = item.get("principalOrFirstMaker", "Unknown Artist").strip() or "Unknown Artist"
-                
-                long_title = item.get("longTitle", "")
+                title = "Untitled"
+                titles = item.get("titles", [])
+                if titles:
+                    title = titles[0].get("title", "Untitled")
+
+                artist = "Unknown Artist"
+                production = item.get("production", [])
+                if production:
+                    artist = production[0].get("creator", "Unknown Artist")
+
                 date_str = "Unknown Date"
-                if long_title:
-                    date_str = long_title.split(",")[-1].strip()
+                prod_dates = item.get("production_date", [])
+                if prod_dates:
+                    date_str = prod_dates[0].get("period", "Unknown Date")
 
-                detail_url = f"https://www.rijksmuseum.nl/api/en/collection/{artwork_id}"
-                detail_params = {"key": config.RIJKSMUSEUM_API_KEY, "format": "json"}
-                detail_resp = self.session.get(detail_url, params=detail_params, timeout=HTTP_TIMEOUT)
-                
                 raw_medium = ""
+                techniques = item.get("techniques", [])
+                if techniques:
+                    raw_medium = techniques[0]
+
                 classification = ""
-                object_name = ""
-                on_view = False
+                object_names = item.get("object_names", [])
+                if object_names:
+                    classification = object_names[0].get("name", "")
 
-                if detail_resp.status_code == 200:
-                    detail_data = detail_resp.json().get("artObject", {})
-                    
-                    dating = detail_data.get("dating", {})
-                    if dating and dating.get("presentingDate"):
-                        date_str = dating.get("presentingDate")
-                    
-                    materials = detail_data.get("materials", [])
-                    raw_medium = ", ".join(materials) if materials else ""
-                    
-                    object_types = detail_data.get("objectTypes", [])
-                    object_name = ", ".join(object_types) if object_types else ""
-                    
-                    location = detail_data.get("location", "")
-                    on_view = bool(location)
-
-                # Puanlama
                 score, log_summary = ArtworkScorer.calculate_score(
-                    title=title,
-                    artist=artist,
-                    date_str=date_str,
-                    raw_medium=raw_medium,
-                    classification=classification,
-                    object_name=object_name,
-                    image_url=image_url,
-                    is_highlight=False,
-                    has_additional_images=False,
-                    on_view=on_view
+                    title=title, artist=artist, date_str=date_str,
+                    raw_medium=raw_medium, classification=classification,
+                    object_name="", image_url=image_url,
+                    is_highlight=False, has_additional_images=False, on_view=item.get("on_display", False)
                 )
 
-                logger.debug(f"Rijksmuseum ID {artwork_id} Değerlendirmesi: {log_summary}")
+                logger.debug(f"SMK ID {artwork_id} Değerlendirmesi: {log_summary}")
 
                 if score >= MINIMUM_QUALITY_SCORE:
-                    medium_type = ArtworkScorer.classify_medium(raw_medium, classification, object_name)
-                    logger.info(f"✓ Rijksmuseum Eseri Onaylandı ({score}/100): '{title}' by {artist} [{medium_type}]")
+                    medium_type = ArtworkScorer.classify_medium(raw_medium, classification, "")
+                    logger.info(f"✓ SMK Eseri Onaylandı ({score}/100): '{title}' by {artist} [{medium_type}]")
                     return Artwork(
-                        museum="rijksmuseum",
-                        id=artwork_id,
-                        title=title,
-                        artist=artist,
-                        date=date_str,
-                        image_url=image_url,
-                        museum_name="Rijksmuseum, Amsterdam",
-                        medium_type=medium_type,
-                        raw_medium=raw_medium,
-                        score=score,
-                        style_or_era="Dutch Art",
-                        alt_text=f"{title} by {artist}. {raw_medium}. {detail_data.get('description', '')[:100]}"
+                        museum="smk", id=artwork_id, title=title, artist=artist, date=date_str,
+                        image_url=image_url, museum_name="Statens Museum for Kunst (SMK), Copenhagen",
+                        medium_type=medium_type, raw_medium=raw_medium, score=score, style_or_era="Danish Art",
+                        alt_text=f"{title} by {artist}. {raw_medium}."
                     )
-
         except Exception as e:
-            logger.error(f"Rijksmuseum API işleminde hata: {e}")
+            logger.error(f"SMK API işleminde hata: {e}")
+        return None
 
+    # ----------------------------------------------------------------------
+    # 5. Harvard Art Museums
+    # ----------------------------------------------------------------------
+    def fetch_harvard_artwork(self, posted_ids: Set[str], target_medium: str = None) -> Optional[Artwork]:
+        """Harvard Art Museums API'sinden eser seçer (API Key gerektirir)."""
+        if not config.HARVARD_API_KEY:
+            logger.warning("Harvard API anahtarı (HARVARD_API_KEY) tanımlanmamış, atlanıyor.")
+            return None
+
+        logger.info(f"Harvard Art Museums API taranıyor (Hedef: {target_medium or 'Karışık'})...")
+        
+        search_url = "https://api.harvardartmuseums.org/object"
+        random_page = random.randint(1, 50)
+        
+        params = {
+            "apikey": config.HARVARD_API_KEY,
+            "hasimage": 1,
+            "permissionlevel": 0, # Public Domain
+            "sort": "random",
+            "page": random_page,
+            "size": 20
+        }
+        
+        if target_medium == "Painting":
+            params["classification"] = "Paintings"
+        elif target_medium == "Sculpture":
+            params["classification"] = "Sculpture"
+        elif target_medium == "Drawing":
+            params["classification"] = "Drawings"
+
+        try:
+            resp = self.session.get(search_url, params=params, timeout=HTTP_TIMEOUT)
+            if resp.status_code != 200:
+                logger.warning(f"Harvard arama hatası: HTTP {resp.status_code}")
+                return None
+
+            data = resp.json()
+            artworks = data.get("records", [])
+            if not artworks:
+                return None
+
+            for item in artworks:
+                artwork_id = str(item.get("id", ""))
+                if not artwork_id or artwork_id in posted_ids:
+                    continue
+
+                images = item.get("images", [])
+                image_url = ""
+                if images:
+                    image_url = images[0].get("baseimageurl", "")
+                if not image_url:
+                    continue
+
+                title = item.get("title", "Untitled").strip()
+                artist = "Unknown Artist"
+                people = item.get("people", [])
+                if people:
+                    artist = people[0].get("name", "Unknown Artist")
+
+                date_str = str(item.get("dated", "Unknown Date"))
+                raw_medium = item.get("medium", "") or ""
+                classification = item.get("classification", "") or ""
+
+                score, log_summary = ArtworkScorer.calculate_score(
+                    title=title, artist=artist, date_str=date_str,
+                    raw_medium=raw_medium, classification=classification,
+                    object_name="", image_url=image_url,
+                    is_highlight=False, has_additional_images=bool(len(images) > 1), on_view=False
+                )
+
+                logger.debug(f"Harvard ID {artwork_id} Değerlendirmesi: {log_summary}")
+
+                if score >= MINIMUM_QUALITY_SCORE:
+                    medium_type = ArtworkScorer.classify_medium(raw_medium, classification, "")
+                    logger.info(f"✓ Harvard Eseri Onaylandı ({score}/100): '{title}' by {artist} [{medium_type}]")
+                    return Artwork(
+                        museum="harvard", id=artwork_id, title=title, artist=artist, date=date_str,
+                        image_url=image_url, museum_name="Harvard Art Museums",
+                        medium_type=medium_type, raw_medium=raw_medium, score=score, style_or_era=item.get("culture", ""),
+                        alt_text=f"{title} by {artist}. {raw_medium}."
+                    )
+        except Exception as e:
+            logger.error(f"Harvard API işleminde hata: {e}")
         return None
 
     # ----------------------------------------------------------------------
@@ -656,7 +703,9 @@ class MuseumAPIClient:
         museum_fetchers = [
             ("met", self.fetch_met_artwork),
             ("aic", self.fetch_aic_artwork),
-            ("cma", self.fetch_cma_artwork)
+            ("cma", self.fetch_cma_artwork),
+            ("smk", self.fetch_smk_artwork),
+            ("harvard", self.fetch_harvard_artwork)
         ]
 
         random.shuffle(museum_fetchers)
@@ -670,7 +719,5 @@ class MuseumAPIClient:
                     logger.warning(f"Bulunan eser ({artwork.medium_type}) hedeflenen tür ({target_medium}) ile uyuşmadı, bir sonraki müzeye geçiliyor.")
                     continue
                 return artwork
-            logger.warning(f"{museum_key.upper()} üzerinden 85+ puanlı eser arayışı devam ediyor...")
-
-        logger.error("Hiçbir müze API'sinden 85/100 kriterini sağlayan bir eser bulunamadı!")
+        logger.error("Hiçbir müze API'sinden 65/100 kriterini sağlayan bir eser bulunamadı!")
         return None

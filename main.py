@@ -18,24 +18,24 @@ logger = config.setup_logging()
 
 
 def load_posted_ids() -> Dict[str, List[str]]:
-    """posted_ids.json dosyasını okur; dosya yoksa veya bozuksa varsayılan yapıyı döner."""
-    default_data = {"met": [], "aic": [], "cma": []}
+    """Daha önce paylaşılan eserlerin ID'lerini yükler (Her müze için ayrı liste)."""
+    default_structure = {"met": [], "aic": [], "cma": [], "rijksmuseum": [], "smk": [], "harvard": []}
     if not config.POSTED_IDS_FILE.exists():
         logger.info(f"{config.POSTED_IDS_FILE} bulunamadı, yeni oluşturuluyor.")
-        save_posted_ids(default_data)
-        return default_data
+        save_posted_ids(default_structure)
+        return default_structure
 
     try:
         with open(config.POSTED_IDS_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-            # Tüm müze anahtarlarının varlığını garanti et
-            for key in ["met", "aic", "cma", "rijksmuseum"]:
+            # Eksik anahtarları tamamla (Geriye dönük uyumluluk)
+            for key in default_structure:
                 if key not in data:
                     data[key] = []
             return data
     except Exception as e:
         logger.error(f"posted_ids.json okunurken hata: {e}. Varsayılan yapı kullanılacak.")
-        return default_data
+        return default_structure
 
 
 def save_posted_ids(data: Dict[str, List[str]]) -> None:
