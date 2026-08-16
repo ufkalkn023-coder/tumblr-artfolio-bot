@@ -28,8 +28,7 @@ RIJKSMUSEUM_API_KEY = os.getenv("RIJKSMUSEUM_API_KEY", "0fiuZFhW").strip()
 # Harvard Art Museums API
 HARVARD_API_KEY = os.getenv("HARVARD_API_KEY", "").strip()
 
-# Çapraz Yönlendirme Metni
-INSTAGRAM_CALLOUT = "Follow on Instagram for more: @artfolio.db"
+# Çapraz Yönlendirme Metni (Kaldırıldı)
 
 # Tumblr SEO Etiketleri (Tam 5 adet olacak şekilde dinamik olarak tamamlanır)
 DEFAULT_TAGS = ["art", "classical art", "oil painting", "museum"]

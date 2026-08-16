@@ -50,6 +50,14 @@ def save_posted_ids(data: Dict[str, List[str]]) -> None:
 
 def run_curation_cycle():
     """Tek bir kürasyon ve paylaşım döngüsünü yürütür."""
+    import time
+    import random
+    
+    # Jitter / Rastgele Gecikme (3 ila 7 dakika arası)
+    delay_seconds = random.randint(180, 420)
+    logger.info(f"Bot tespiti atlatmak için {delay_seconds} saniye rastgele gecikme bekleniyor...")
+    time.sleep(delay_seconds)
+    
     logger.info("=== artfolio.db Tumblr Kürasyon Döngüsü Başlatıldı ===")
 
     # 1. State Yükle

@@ -40,9 +40,13 @@ class Artwork:
     id: str               # Müze içi benzersiz ID
     title: str            # Eser adı
     artist: str           # Sanatçı adı
+    artist_bio: str       # Sanatçı künyesi (Milliyet, Doğum-Ölüm Yılı)
     date: str             # Yapım yılı / dönemi
     image_url: str        # Yüksek çözünürlüklü görsel bağlantısı
+    original_source_url: str # Orijinal müze bağlantısı
     museum_name: str      # Tam müze adı
+    location_info: str    # Müze içi oda/galeri lokasyonu
+    dimensions: str       # Fiziksel boyutlar
     medium_type: str      # 'Painting', 'Sculpture', 'Drawing', 'Object'
     raw_medium: str       # Ham teknik/malzeme bilgisi (örn: "Oil on canvas", "Bronze", "Marble")
     score: int            # 0 - 100 arası kalite puanı
@@ -184,6 +188,8 @@ class MuseumAPIClient:
         logger.info(f"The Met API taranıyor (Hedef: {target_medium or 'Karışık'})...")
         
         search_terms = ["masterpiece", "portrait", "sculpture", "painting", "drawing", "renaissance", "marble", "bronze"]
+        if random.random() < 0.1:
+            search_terms.extend(["self portrait", "last work", "final work"])
         if target_medium == "Painting":
             search_terms = ["painting", "portrait", "oil on canvas", "fresco"]
         elif target_medium == "Sculpture":
@@ -233,6 +239,19 @@ class MuseumAPIClient:
 
                 title = obj_data.get("title", "Untitled").strip() or "Untitled"
                 artist = obj_data.get("artistDisplayName", "").strip() or "Unknown Artist"
+                
+                artistNationality = obj_data.get("artistNationality", "").strip()
+                artistBeginDate = obj_data.get("artistBeginDate", "").strip()
+                artistEndDate = obj_data.get("artistEndDate", "").strip()
+                artist_bio = artist
+                if artistNationality or artistBeginDate or artistEndDate:
+                    bio_parts = []
+                    if artistNationality: bio_parts.append(artistNationality)
+                    years = f"{artistBeginDate}–{artistEndDate}".strip("–")
+                    if years: bio_parts.append(years)
+                    if bio_parts:
+                        artist_bio = f"{artist} ({', '.join(bio_parts)})"
+
                 date_str = obj_data.get("objectDate", "").strip() or "Unknown Date"
                 department = obj_data.get("department", "")
                 raw_medium = obj_data.get("medium", "")
@@ -240,6 +259,12 @@ class MuseumAPIClient:
                 object_name = obj_data.get("objectName", "")
                 is_highlight = obj_data.get("isHighlight", False)
                 additional_images = bool(obj_data.get("additionalImages", []))
+                
+                dimensions = obj_data.get("dimensions", "").strip() or "Unknown dimensions"
+                gallery_num = obj_data.get("GalleryNumber", "").strip()
+                repository = obj_data.get("repository", "The Metropolitan Museum of Art")
+                location_info = f"Gallery {gallery_num}, {repository}" if gallery_num else repository
+                original_source_url = obj_data.get("objectURL", "").strip()
 
                 # Puanlama
                 score, log_summary = ArtworkScorer.calculate_score(
@@ -265,9 +290,13 @@ class MuseumAPIClient:
                         id=str(obj_id),
                         title=title,
                         artist=artist,
+                        artist_bio=artist_bio,
                         date=date_str,
                         image_url=primary_image,
+                        original_source_url=original_source_url,
                         museum_name="The Metropolitan Museum of Art, New York",
+                        location_info=location_info,
+                        dimensions=dimensions,
                         medium_type=medium_type,
                         raw_medium=raw_medium,
                         score=score,
@@ -358,6 +387,8 @@ class MuseumAPIClient:
                 title = item.get("title", "Untitled").strip() or "Untitled"
                 artist_raw = item.get("artist_display", "").strip() or "Unknown Artist"
                 artist = artist_raw.split("\n")[0].strip()
+                artist_bio = artist_raw.replace("\n", " ")
+                
                 date_str = item.get("date_display", "").strip() or "Unknown Date"
                 raw_medium = item.get("medium_display", "") or ""
                 classification = item.get("classification_title", "") or ""
@@ -365,6 +396,11 @@ class MuseumAPIClient:
                 is_boosted = item.get("is_boosted", False)
                 is_on_view = item.get("is_on_view", False)
                 style_title = item.get("style_title")
+                
+                dimensions = item.get("dimensions", "").strip() or "Unknown dimensions"
+                gallery_title = item.get("gallery_title", "").strip()
+                location_info = gallery_title if gallery_title else "Art Institute of Chicago"
+                original_source_url = f"https://www.artic.edu/artworks/{artwork_id}"
 
                 # Puanlama
                 score, log_summary = ArtworkScorer.calculate_score(
@@ -390,9 +426,13 @@ class MuseumAPIClient:
                         id=artwork_id,
                         title=title,
                         artist=artist,
+                        artist_bio=artist_bio,
                         date=date_str,
                         image_url=image_url,
+                        original_source_url=original_source_url,
                         museum_name="Art Institute of Chicago",
+                        location_info=location_info,
+                        dimensions=dimensions,
                         medium_type=medium_type,
                         raw_medium=raw_medium,
                         score=score,
@@ -461,8 +501,10 @@ class MuseumAPIClient:
                 title = item.get("title", "Untitled").strip() or "Untitled"
                 creators = item.get("creators", [])
                 artist = "Unknown Artist"
+                artist_bio = "Unknown Artist"
                 if creators and isinstance(creators, list):
-                    artist = creators[0].get("description", "Unknown Artist")
+                    artist = creators[0].get("description", "Unknown Artist").split("(")[0].strip()
+                    artist_bio = creators[0].get("description", "Unknown Artist")
 
                 date_str = item.get("creation_date", "").strip() or "Unknown Date"
                 raw_medium = item.get("technique", "") or item.get("type", "")
@@ -471,6 +513,11 @@ class MuseumAPIClient:
                 culture = item.get("culture", [""])[0] if isinstance(item.get("culture"), list) and item.get("culture") else None
                 on_view = bool(item.get("current_location"))
                 is_highlight = bool(item.get("share_license_status") == "CC0" and on_view)
+                
+                dimensions = item.get("measurements", "").strip() or "Unknown dimensions"
+                current_location = item.get("current_location", "").strip()
+                location_info = current_location if current_location else "The Cleveland Museum of Art"
+                original_source_url = item.get("url", "").strip()
 
                 # Puanlama
                 score, log_summary = ArtworkScorer.calculate_score(
@@ -496,9 +543,13 @@ class MuseumAPIClient:
                         id=artwork_id,
                         title=title,
                         artist=artist,
+                        artist_bio=artist_bio,
                         date=date_str,
                         image_url=image_url,
+                        original_source_url=original_source_url,
                         museum_name="The Cleveland Museum of Art",
+                        location_info=location_info,
+                        dimensions=dimensions,
                         medium_type=medium_type,
                         raw_medium=raw_medium,
                         score=score,
@@ -566,9 +617,11 @@ class MuseumAPIClient:
                     title = titles[0].get("title", "Untitled")
 
                 artist = "Unknown Artist"
+                artist_bio = "Unknown Artist"
                 production = item.get("production", [])
                 if production:
                     artist = production[0].get("creator", "Unknown Artist")
+                    artist_bio = artist
 
                 date_str = "Unknown Date"
                 prod_dates = item.get("production_date", [])
@@ -584,6 +637,14 @@ class MuseumAPIClient:
                 object_names = item.get("object_names", [])
                 if object_names:
                     classification = object_names[0].get("name", "")
+                    
+                dimensions = ""
+                dim_list = item.get("dimensions", [])
+                if dim_list and isinstance(dim_list, list):
+                    dimensions = dim_list[0].get("value", "") + " " + dim_list[0].get("unit", "")
+                
+                location_info = "Statens Museum for Kunst (SMK), Copenhagen"
+                original_source_url = f"https://open.smk.dk/en/artwork/image/{artwork_id}"
 
                 score, log_summary = ArtworkScorer.calculate_score(
                     title=title, artist=artist, date_str=date_str,
@@ -598,8 +659,9 @@ class MuseumAPIClient:
                     medium_type = ArtworkScorer.classify_medium(raw_medium, classification, "")
                     logger.info(f"✓ SMK Eseri Onaylandı ({score}/100): '{title}' by {artist} [{medium_type}]")
                     return Artwork(
-                        museum="smk", id=artwork_id, title=title, artist=artist, date=date_str,
-                        image_url=image_url, museum_name="Statens Museum for Kunst (SMK), Copenhagen",
+                        museum="smk", id=artwork_id, title=title, artist=artist, artist_bio=artist_bio, date=date_str,
+                        image_url=image_url, original_source_url=original_source_url,
+                        museum_name="Statens Museum for Kunst (SMK), Copenhagen", location_info=location_info, dimensions=dimensions,
                         medium_type=medium_type, raw_medium=raw_medium, score=score, style_or_era="Danish Art",
                         alt_text=f"{title} by {artist}. {raw_medium}."
                     )
@@ -662,13 +724,23 @@ class MuseumAPIClient:
 
                 title = item.get("title", "Untitled").strip()
                 artist = "Unknown Artist"
+                artist_bio = "Unknown Artist"
                 people = item.get("people", [])
                 if people:
                     artist = people[0].get("name", "Unknown Artist")
+                    artist_bio = artist
+                    displaydate = people[0].get("displaydate", "")
+                    culture = people[0].get("culture", "")
+                    if displaydate or culture:
+                        artist_bio = f"{artist} ({culture}, {displaydate})".replace(" (, ", " (").replace(", )", ")")
 
                 date_str = str(item.get("dated", "Unknown Date"))
                 raw_medium = item.get("medium", "") or ""
                 classification = item.get("classification", "") or ""
+                
+                dimensions = item.get("dimensions", "").strip() or "Unknown dimensions"
+                location_info = "Harvard Art Museums"
+                original_source_url = item.get("url", "").strip()
 
                 score, log_summary = ArtworkScorer.calculate_score(
                     title=title, artist=artist, date_str=date_str,
@@ -683,8 +755,9 @@ class MuseumAPIClient:
                     medium_type = ArtworkScorer.classify_medium(raw_medium, classification, "")
                     logger.info(f"✓ Harvard Eseri Onaylandı ({score}/100): '{title}' by {artist} [{medium_type}]")
                     return Artwork(
-                        museum="harvard", id=artwork_id, title=title, artist=artist, date=date_str,
-                        image_url=image_url, museum_name="Harvard Art Museums",
+                        museum="harvard", id=artwork_id, title=title, artist=artist, artist_bio=artist_bio, date=date_str,
+                        image_url=image_url, original_source_url=original_source_url, museum_name="Harvard Art Museums",
+                        location_info=location_info, dimensions=dimensions,
                         medium_type=medium_type, raw_medium=raw_medium, score=score, style_or_era=item.get("culture", ""),
                         alt_text=f"{title} by {artist}. {raw_medium}."
                     )

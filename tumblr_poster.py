@@ -42,20 +42,28 @@ class TumblrPoster:
 
     def format_caption(self, artwork: Artwork) -> str:
         """
-        Eser bilgilerini kullanarak (ve varsa renk paleti HTML'i ekleyerek) post açıklamasını oluşturur.
+        Eser bilgilerini kullanarak post açıklamasını oluşturur.
         """
         medium_info = f"{artwork.medium_type} ({artwork.raw_medium})" if artwork.raw_medium else artwork.medium_type
 
+        # Use artist_bio if available, otherwise just artist
+        artist_display = getattr(artwork, 'artist_bio', artwork.artist)
+        
         caption_lines = [
             f"<p><b>Title:</b> {artwork.title}</p>",
-            f"<p><b>Artist:</b> {artwork.artist}</p>",
+            f"<p><b>Artist:</b> {artist_display}</p>",
             f"<p><b>Date:</b> {artwork.date}</p>",
-            f"<p><b>Type:</b> {medium_info}</p>",
-            f"<p><b>Museum:</b> {artwork.museum_name}</p>",
-            "<br>"
         ]
+        
+        if getattr(artwork, 'dimensions', ''):
+            caption_lines.append(f"<p><b>Dimensions:</b> {artwork.dimensions}</p>")
             
-        caption_lines.append(f"<p>{config.INSTAGRAM_CALLOUT}</p>")
+        caption_lines.append(f"<p><b>Type:</b> {medium_info}</p>")
+        
+        # Cross-Tag Navigation
+        clean_artist_tag = re.sub(r'[^a-z0-9 ]', '', artwork.artist.lower()).replace(' ', '')
+        if clean_artist_tag:
+            caption_lines.append(f'<br><p>More from this artist: <a href="/tagged/my:{clean_artist_tag}">#my:{clean_artist_tag}</a></p>')
         
         return "".join(caption_lines)
 
@@ -63,47 +71,70 @@ class TumblrPoster:
         """
         Eserin türüne (Resim, Heykel, Çizim, Obje) göre optimize edilmiş TAM 5 adet Tumblr SEO etiketi üretir.
         """
-        # Tür bazlı ana etiket
+        GENERAL_TAGS = ["classical art", "art history", "fine art", "traditional art", "museum art", "art curation", "masterpiece", "visual art", "art appreciation"]
+        MOVEMENT_TAGS = ["renaissance art", "baroque art", "romanticism", "pre raphaelite", "rococo", "neoclassicism", "impressionism", "post impressionism", "dutch golden age", "symbolism art"]
+        AESTHETIC_TAGS = ["dark academia", "light academia", "classical aesthetic", "vintage aesthetic", "romantic aesthetic", "moody art", "antique aesthetic", "ethereal art", "historical aesthetic", "poetic art"]
+        GENRE_TAGS = ["oil portrait", "classical portrait", "classical landscape", "still life painting", "mythology art", "greek mythology art", "botanical painting", "chiaroscuro", "female portrait", "historical painting"]
+        
+        tags = []
+        
+        # 1. Genel Sanat Etiketi
+        tags.append(random.choice(GENERAL_TAGS))
+        
+        # 2. Akım Etiketi
+        era_tag = random.choice(MOVEMENT_TAGS)
+        if artwork.style_or_era:
+            clean_style = re.sub(r"[^a-zA-Z0-9\s]", "", artwork.style_or_era).strip().lower()
+            if clean_style and len(clean_style) <= 25:
+                # If specific style matches any movement
+                for m_tag in MOVEMENT_TAGS:
+                    if m_tag in clean_style or clean_style in m_tag:
+                        era_tag = m_tag
+                        break
+        tags.append(era_tag)
+        
+        # 3. Estetik Etiketi
+        tags.append(random.choice(AESTHETIC_TAGS))
+        
+        # 4. Teknik Etiketi
         medium_tag_map = {
             "Painting": "oil painting",
             "Sculpture": "sculpture",
             "Drawing": "drawing",
             "Object": "artifact"
         }
-        type_tag = medium_tag_map.get(artwork.medium_type, "fine art")
-
-        # 1-3. Temel Etiketler
-        base_tags = ["art", "classical art", type_tag, "museum"]
-
-        # 5. Dinamik Etiket (Dönem / Stil / Akım veya Fallback)
-        fifth_tag = "fine art"
-        if artwork.style_or_era:
-            clean_style = re.sub(r"[^a-zA-Z0-9\s]", "", artwork.style_or_era).strip().lower()
-            if clean_style and len(clean_style) <= 25 and clean_style not in base_tags:
-                fifth_tag = clean_style
-        elif artwork.medium_type == "Sculpture":
-            fifth_tag = "classical sculpture"
-        elif artwork.medium_type == "Drawing":
-            fifth_tag = "master drawing"
-        elif artwork.medium_type == "Painting":
-            fifth_tag = "renaissance"
-
-        tags = base_tags + [fifth_tag]
-
-        # Tekilleştir ve tam olarak 5 etiket döndür
-        unique_tags = []
+        tech_tag = medium_tag_map.get(artwork.medium_type, "fine art")
+        if artwork.raw_medium:
+            raw_clean = artwork.raw_medium.lower()
+            if "marble" in raw_clean: tech_tag = "marble sculpture"
+            elif "bronze" in raw_clean: tech_tag = "bronze sculpture"
+            elif "watercolor" in raw_clean: tech_tag = "watercolor art"
+            elif "fresco" in raw_clean: tech_tag = "fresco"
+        tags.append(tech_tag)
+        
+        # 5. Konu/Karakter Etiketi
+        subject_tag = random.choice(GENRE_TAGS)
+        title_clean = artwork.title.lower()
+        if "portrait" in title_clean: subject_tag = "classical portrait"
+        elif "landscape" in title_clean: subject_tag = "classical landscape"
+        elif "flower" in title_clean: subject_tag = "botanical painting"
+        elif "myth" in title_clean or "venus" in title_clean or "apollo" in title_clean: subject_tag = "mythology art"
+        tags.append(subject_tag)
+        
+        # Ensure tags are clean, lowercase, no special characters, and unique
+        final_tags = []
         for t in tags:
-            if t not in unique_tags:
-                unique_tags.append(t)
-
-        fallbacks = ["renaissance", "masterpiece", "fine art", "history of art", "visual art"]
+            clean_t = re.sub(r"[^a-z0-9\s]", "", t.lower()).strip()
+            if clean_t and clean_t not in final_tags:
+                final_tags.append(clean_t)
+                
+        # Fill with fallback if less than 5
+        fallbacks = ["art", "classical art", "museum", "history of art", "aesthetic"]
         for fb in fallbacks:
-            if len(unique_tags) >= 5:
-                break
-            if fb not in unique_tags:
-                unique_tags.append(fb)
-
-        return unique_tags[:5]
+            if len(final_tags) >= 5: break
+            if fb not in final_tags: final_tags.append(fb)
+            
+        return final_tags[:5]
 
     def post_artwork(self, artwork: Artwork, image_paths: Optional[List[str]] = None) -> bool:
         """
@@ -124,6 +155,8 @@ class TumblrPoster:
                 "caption": caption,
                 "tags": tags
             }
+            if getattr(artwork, 'original_source_url', ''):
+                kwargs["source_url"] = artwork.original_source_url
 
             if image_paths and len(image_paths) > 0:
                 response = self.client.create_photo(self.blog_name, data=image_paths, **kwargs)

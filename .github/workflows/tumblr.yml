@@ -2,8 +2,8 @@ name: Tumblr Curation Bot
 
 on:
   schedule:
-    # Her 30 dakikada bir çalış (Günde 48 paylaşım)
-    - cron: '*/30 * * * *'
+    # Her saat başı çalış (Günde 24 paylaşım)
+    - cron: '0 * * * *'
   workflow_dispatch: # Manuel tetiklemeye izin ver
 
 jobs:
