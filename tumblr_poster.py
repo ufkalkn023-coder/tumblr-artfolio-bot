@@ -156,7 +156,7 @@ class TumblrPoster:
                 "tags": tags
             }
             if getattr(artwork, 'original_source_url', ''):
-                kwargs["source_url"] = artwork.original_source_url
+                kwargs["link"] = artwork.original_source_url
 
             if image_paths and len(image_paths) > 0:
                 response = self.client.create_photo(self.blog_name, data=image_paths, **kwargs)

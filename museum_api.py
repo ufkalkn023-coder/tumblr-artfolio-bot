@@ -233,16 +233,16 @@ class MuseumAPIClient:
                 if not obj_data.get("isPublicDomain", False):
                     continue
 
-                primary_image = obj_data.get("primaryImage", "").strip()
+                primary_image = (obj_data.get("primaryImage") or "").strip()
                 if not primary_image:
                     continue
 
-                title = obj_data.get("title", "Untitled").strip() or "Untitled"
-                artist = obj_data.get("artistDisplayName", "").strip() or "Unknown Artist"
+                title = (obj_data.get("title") or "Untitled").strip() or "Untitled"
+                artist = (obj_data.get("artistDisplayName") or "").strip() or "Unknown Artist"
                 
-                artistNationality = obj_data.get("artistNationality", "").strip()
-                artistBeginDate = obj_data.get("artistBeginDate", "").strip()
-                artistEndDate = obj_data.get("artistEndDate", "").strip()
+                artistNationality = (obj_data.get("artistNationality") or "").strip()
+                artistBeginDate = (obj_data.get("artistBeginDate") or "").strip()
+                artistEndDate = (obj_data.get("artistEndDate") or "").strip()
                 artist_bio = artist
                 if artistNationality or artistBeginDate or artistEndDate:
                     bio_parts = []
@@ -252,7 +252,7 @@ class MuseumAPIClient:
                     if bio_parts:
                         artist_bio = f"{artist} ({', '.join(bio_parts)})"
 
-                date_str = obj_data.get("objectDate", "").strip() or "Unknown Date"
+                date_str = (obj_data.get("objectDate") or "").strip() or "Unknown Date"
                 department = obj_data.get("department", "")
                 raw_medium = obj_data.get("medium", "")
                 classification = obj_data.get("classification", "")
@@ -260,11 +260,11 @@ class MuseumAPIClient:
                 is_highlight = obj_data.get("isHighlight", False)
                 additional_images = bool(obj_data.get("additionalImages", []))
                 
-                dimensions = obj_data.get("dimensions", "").strip() or "Unknown dimensions"
-                gallery_num = obj_data.get("GalleryNumber", "").strip()
+                dimensions = (obj_data.get("dimensions") or "").strip() or "Unknown dimensions"
+                gallery_num = (obj_data.get("GalleryNumber") or "").strip()
                 repository = obj_data.get("repository", "The Metropolitan Museum of Art")
                 location_info = f"Gallery {gallery_num}, {repository}" if gallery_num else repository
-                original_source_url = obj_data.get("objectURL", "").strip()
+                original_source_url = (obj_data.get("objectURL") or "").strip()
 
                 # Puanlama
                 score, log_summary = ArtworkScorer.calculate_score(
@@ -384,12 +384,12 @@ class MuseumAPIClient:
                     continue
 
                 image_url = f"https://www.artic.edu/iiif/2/{image_id}/full/1686,/0/default.jpg"
-                title = item.get("title", "Untitled").strip() or "Untitled"
-                artist_raw = item.get("artist_display", "").strip() or "Unknown Artist"
+                title = (item.get("title") or "Untitled").strip() or "Untitled"
+                artist_raw = (item.get("artist_display") or "").strip() or "Unknown Artist"
                 artist = artist_raw.split("\n")[0].strip()
                 artist_bio = artist_raw.replace("\n", " ")
                 
-                date_str = item.get("date_display", "").strip() or "Unknown Date"
+                date_str = (item.get("date_display") or "").strip() or "Unknown Date"
                 raw_medium = item.get("medium_display", "") or ""
                 classification = item.get("classification_title", "") or ""
                 object_name = item.get("artwork_type_title", "") or ""
@@ -397,8 +397,8 @@ class MuseumAPIClient:
                 is_on_view = item.get("is_on_view", False)
                 style_title = item.get("style_title")
                 
-                dimensions = item.get("dimensions", "").strip() or "Unknown dimensions"
-                gallery_title = item.get("gallery_title", "").strip()
+                dimensions = (item.get("dimensions") or "").strip() or "Unknown dimensions"
+                gallery_title = (item.get("gallery_title") or "").strip()
                 location_info = gallery_title if gallery_title else "Art Institute of Chicago"
                 original_source_url = f"https://www.artic.edu/artworks/{artwork_id}"
 
@@ -498,15 +498,16 @@ class MuseumAPIClient:
                 if not image_url:
                     continue
 
-                title = item.get("title", "Untitled").strip() or "Untitled"
+                title = (item.get("title") or "Untitled").strip() or "Untitled"
                 creators = item.get("creators", [])
                 artist = "Unknown Artist"
                 artist_bio = "Unknown Artist"
                 if creators and isinstance(creators, list):
-                    artist = creators[0].get("description", "Unknown Artist").split("(")[0].strip()
-                    artist_bio = creators[0].get("description", "Unknown Artist")
+                    desc = creators[0].get("description") or "Unknown Artist"
+                    artist = desc.split("(")[0].strip()
+                    artist_bio = desc
 
-                date_str = item.get("creation_date", "").strip() or "Unknown Date"
+                date_str = (item.get("creation_date") or "").strip() or "Unknown Date"
                 raw_medium = item.get("technique", "") or item.get("type", "")
                 classification = item.get("type", "")
                 object_name = item.get("department", "")
@@ -514,10 +515,10 @@ class MuseumAPIClient:
                 on_view = bool(item.get("current_location"))
                 is_highlight = bool(item.get("share_license_status") == "CC0" and on_view)
                 
-                dimensions = item.get("measurements", "").strip() or "Unknown dimensions"
-                current_location = item.get("current_location", "").strip()
+                dimensions = (item.get("measurements") or "").strip() or "Unknown dimensions"
+                current_location = (item.get("current_location") or "").strip()
                 location_info = current_location if current_location else "The Cleveland Museum of Art"
-                original_source_url = item.get("url", "").strip()
+                original_source_url = (item.get("url") or "").strip()
 
                 # Puanlama
                 score, log_summary = ArtworkScorer.calculate_score(
@@ -722,7 +723,7 @@ class MuseumAPIClient:
                 if not image_url:
                     continue
 
-                title = item.get("title", "Untitled").strip()
+                title = (item.get("title") or "Untitled").strip()
                 artist = "Unknown Artist"
                 artist_bio = "Unknown Artist"
                 people = item.get("people", [])
@@ -738,9 +739,9 @@ class MuseumAPIClient:
                 raw_medium = item.get("medium", "") or ""
                 classification = item.get("classification", "") or ""
                 
-                dimensions = item.get("dimensions", "").strip() or "Unknown dimensions"
+                dimensions = (item.get("dimensions") or "").strip() or "Unknown dimensions"
                 location_info = "Harvard Art Museums"
-                original_source_url = item.get("url", "").strip()
+                original_source_url = (item.get("url") or "").strip()
 
                 score, log_summary = ArtworkScorer.calculate_score(
                     title=title, artist=artist, date_str=date_str,
