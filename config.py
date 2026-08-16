@@ -36,10 +36,10 @@ FALLBACK_TAG = "fine art"
 
 # İçerik Türü Ağırlıkları (Yüzde Oranları)
 CONTENT_WEIGHTS = {
-    "Painting": 85,
-    "Sculpture": 10,
-    "Drawing": 5,
-    "Object": 0
+    "Painting": 60,
+    "Sculpture": 20,
+    "Drawing": 0,
+    "Object": 20
 }
 
 # Loglama Yapılandırması
