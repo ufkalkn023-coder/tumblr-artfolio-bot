@@ -11,15 +11,6 @@ import pytumblr
 from museum_api import Artwork
 import config
 
-QUESTIONS = [
-    "Sizce bu eserdeki en dikkat çekici detay nedir?",
-    "Bu eseri evinizin hangi odasına asardınız?",
-    "Eserdeki renk kullanımı size hangi duyguyu hissettiriyor?",
-    "Sizce karakterin gözlerindeki ifade ne anlatıyor?",
-    "Sanatçı burada ne anlatmak istemiş olabilir?",
-]
-
-
 logger = logging.getLogger("artfolio_bot.tumblr_poster")
 
 
@@ -65,10 +56,6 @@ class TumblrPoster:
         ]
             
         caption_lines.append(f"<p>{config.INSTAGRAM_CALLOUT}</p>")
-        
-        # Günün sorusu ekle
-        question = random.choice(QUESTIONS)
-        caption_lines.append(f"<br><p><i>{question}</i></p>")
         
         return "".join(caption_lines)
 
