@@ -207,6 +207,86 @@ class TestTumblrBot(unittest.TestCase):
         self.assertEqual(self.museum_client.session.post.call_count, MAX_TRANSIENT_HTTP_ATTEMPTS)
         self.assertEqual(sleep.call_count, MAX_TRANSIENT_HTTP_ATTEMPTS - 1)
 
+    def test_aic_disabled_is_excluded_without_consuming_an_attempt(self):
+        calls = []
+
+        def make_fetcher(source, result=None):
+            def fetch(posted_ids, target_medium):
+                calls.append(source)
+                self.museum_client.last_fetch_stats = {
+                    "source": source, "candidates": 0, "duplicates": 0,
+                    "rejected_image": 0, "rejected_quality": 0,
+                    "rejected_other": 0, "eligible": int(result is not None),
+                }
+                return result
+            return fetch
+
+        harvard_artwork = Artwork(
+            museum="harvard", id="harvard-1", title="Eligible", artist="Artist",
+            artist_bio="Artist", date="1900", image_url="https://example.com/image.jpg",
+            original_source_url="https://example.com/artwork", museum_name="Harvard",
+            location_info="Gallery", dimensions="", medium_type="Painting",
+            raw_medium="Oil on canvas", score=MINIMUM_QUALITY_SCORE,
+        )
+        self.museum_client.fetch_met_artwork = make_fetcher("met")
+        self.museum_client.fetch_aic_artwork = Mock()
+        self.museum_client.fetch_cma_artwork = make_fetcher("cma")
+        self.museum_client.fetch_smk_artwork = make_fetcher("smk")
+        self.museum_client.fetch_harvard_artwork = make_fetcher("harvard", harvard_artwork)
+
+        with patch("museum_api.AIC_PUBLISHING_ENABLED", False), \
+                patch("museum_api.random.shuffle", side_effect=lambda values: None), \
+                patch("museum_api.logger") as mock_logger:
+            artwork = self.museum_client.get_random_artwork({"aic": ["already-posted"]})
+            repeated_artwork = self.museum_client.get_random_artwork({"aic": ["already-posted"]})
+
+        self.assertEqual(artwork.id, "harvard-1")
+        self.assertEqual(repeated_artwork.id, "harvard-1")
+        self.assertEqual(calls, ["met", "cma", "smk", "harvard"] * 2)
+        self.museum_client.fetch_aic_artwork.assert_not_called()
+        self.assertNotIn("aic", self.museum_client.scoring_telemetry.sources)
+        self.assertNotIn("aic", self.museum_client.pool_telemetry.sources)
+        disabled_logs = [
+            call for call in mock_logger.info.call_args_list
+            if call.args == ("source=aic publishing_disabled reason=iiif_cloudflare_403",)
+        ]
+        self.assertEqual(len(disabled_logs), 1)
+
+    def test_aic_publishing_flag_restores_existing_source_order(self):
+        calls = []
+
+        def make_fetcher(source, result=None):
+            def fetch(posted_ids, target_medium):
+                calls.append(source)
+                self.museum_client.last_fetch_stats = {
+                    "source": source, "candidates": 0, "duplicates": 0,
+                    "rejected_image": 0, "rejected_quality": 0,
+                    "rejected_other": 0, "eligible": int(result is not None),
+                }
+                return result
+            return fetch
+
+        aic_artwork = Artwork(
+            museum="aic", id="aic-1", title="Eligible", artist="Artist",
+            artist_bio="Artist", date="1900", image_url="https://example.com/image.jpg",
+            original_source_url="https://example.com/artwork", museum_name="AIC",
+            location_info="Gallery", dimensions="", medium_type="Painting",
+            raw_medium="Oil on canvas", score=MINIMUM_QUALITY_SCORE,
+        )
+        self.museum_client.fetch_met_artwork = make_fetcher("met")
+        self.museum_client.fetch_aic_artwork = make_fetcher("aic", aic_artwork)
+        self.museum_client.fetch_cma_artwork = Mock()
+        self.museum_client.fetch_smk_artwork = Mock()
+        self.museum_client.fetch_harvard_artwork = Mock()
+
+        with patch("museum_api.AIC_PUBLISHING_ENABLED", True), \
+                patch("museum_api.random.shuffle", side_effect=lambda values: None):
+            artwork = self.museum_client.get_random_artwork({})
+
+        self.assertEqual(artwork.id, "aic-1")
+        self.assertEqual(calls, ["met", "aic"])
+        self.assertEqual(self.museum_client.scoring_telemetry.sources["aic"]["attempts"], 1)
+
     def test_cma_api_fetch_with_score(self):
         """CMA fixture'ından geçerli ve yeterli puanlı eser seçilir."""
         self.museum_client.session.get = Mock(return_value=FakeResponse({

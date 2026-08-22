@@ -22,6 +22,9 @@ MINIMUM_QUALITY_SCORE = 60
 AIC_DEFAULT_IIIF_URL = "https://www.artic.edu/iiif/2"
 AIC_STANDARD_IMAGE_SIZE = 843
 AIC_LARGE_PUBLIC_DOMAIN_IMAGE_SIZE = 1686
+# AIC's IIIF host currently serves Cloudflare challenges to automated clients.
+# Keep the integration intact so it can be restored by flipping this flag.
+AIC_PUBLISHING_ENABLED = False
 
 # Dünya çapında tanınan usta sanatçılar listesi (Puanlama bonusu için)
 FAMOUS_ARTISTS = {
@@ -466,6 +469,7 @@ class MuseumAPIClient:
         self.scoring_telemetry = ScoringTelemetry()
         self.pool_telemetry = CandidatePoolTelemetry()
         self.pool_coverage = {}
+        self._aic_publishing_disabled_logged = False
 
     def log_scoring_telemetry(self):
         self.scoring_telemetry.log(logger)
@@ -1406,13 +1410,18 @@ class MuseumAPIClient:
         Müzeler arasında rastgele seçim yapar. Yalnızca 85+ puan alan eserleri kabul eder.
         Eğer target_medium belirtilmişse o kategoriye ağırlık verir.
         """
-        museum_fetchers = [
-            ("met", self.fetch_met_artwork),
-            ("aic", self.fetch_aic_artwork),
+        museum_fetchers = [("met", self.fetch_met_artwork)]
+        if AIC_PUBLISHING_ENABLED:
+            museum_fetchers.append(("aic", self.fetch_aic_artwork))
+        else:
+            if not self._aic_publishing_disabled_logged:
+                logger.info("source=aic publishing_disabled reason=iiif_cloudflare_403")
+                self._aic_publishing_disabled_logged = True
+        museum_fetchers.extend([
             ("cma", self.fetch_cma_artwork),
             ("smk", self.fetch_smk_artwork),
-            ("harvard", self.fetch_harvard_artwork)
-        ]
+            ("harvard", self.fetch_harvard_artwork),
+        ])
 
         random.shuffle(museum_fetchers)
         run_stats = {
