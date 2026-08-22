@@ -1,27 +1,104 @@
 import os
 import tempfile
 import requests
-from io import BytesIO
 from PIL import Image, ImageOps
 import logging
+import warnings
 
 logger = logging.getLogger("artfolio_bot.image_processor")
 
+IMAGE_DOWNLOAD_TIMEOUT = 30
+MAX_IMAGE_DOWNLOAD_BYTES = 25 * 1024 * 1024
+MAX_IMAGE_PIXELS = 100_000_000
+MAX_IMAGE_DIMENSION = 20_000
+SUPPORTED_IMAGE_MIME_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
+DOWNLOAD_CHUNK_SIZE = 64 * 1024
+
+
 def download_image(url: str) -> str:
     """Görseli indirir ve geçici bir dosyaya kaydeder."""
+    path = None
+    response = None
     try:
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-        response = requests.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
-        
+        logger.info("image_download_start url=%s", url)
+        response = requests.get(
+            url,
+            headers=headers,
+            timeout=IMAGE_DOWNLOAD_TIMEOUT,
+            stream=True,
+        )
+        content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+        if response.status_code != 200:
+            raise ValueError(f"HTTP status {response.status_code}")
+        if content_type not in SUPPORTED_IMAGE_MIME_TYPES:
+            raise ValueError(f"desteklenmeyen Content-Type: {content_type or 'belirtilmemiş'}")
+
+        content_length = response.headers.get("Content-Length")
+        if content_length and int(content_length) > MAX_IMAGE_DOWNLOAD_BYTES:
+            raise ValueError(f"görsel boyutu limiti aşıyor ({MAX_IMAGE_DOWNLOAD_BYTES} bytes)")
+
         fd, path = tempfile.mkstemp(suffix=".jpg")
         with os.fdopen(fd, 'wb') as f:
-            f.write(response.content)
-            
-        return path
+            total_bytes = 0
+            for chunk in response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
+                if not chunk:
+                    continue
+                total_bytes += len(chunk)
+                if total_bytes > MAX_IMAGE_DOWNLOAD_BYTES:
+                    raise ValueError(f"görsel boyutu limiti aşıyor ({MAX_IMAGE_DOWNLOAD_BYTES} bytes)")
+                f.write(chunk)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(path) as image:
+                width, height = image.size
+                if (
+                    width <= 0
+                    or height <= 0
+                    or width > MAX_IMAGE_DIMENSION
+                    or height > MAX_IMAGE_DIMENSION
+                    or width * height > MAX_IMAGE_PIXELS
+                ):
+                    raise ValueError(f"görsel boyutları güvenli sınırların dışında: {width}x{height}")
+                image.verify()
+
+            # verify() yapısal doğrulama yapar; tam decode da truncated veriyi yakalar.
+            with Image.open(path) as image:
+                image.load()
+                width, height = image.size
+
+        logger.info(
+            "image_download_success url=%s mime=%s bytes=%d dimensions=%dx%d",
+            url,
+            content_type,
+            os.path.getsize(path),
+            width,
+            height,
+        )
+
+        result = path
+        path = None
+        return result
     except Exception as e:
-        logger.error(f"Görsel indirilemedi ({url}): {e}")
+        logger.error(
+            "image_download_failure url=%s reason=%s detail=%s",
+            url,
+            type(e).__name__,
+            e,
+        )
         return None
+    finally:
+        if response is not None:
+            try:
+                response.close()
+            except Exception as close_error:
+                logger.warning(f"Görsel response'u kapatılamadı: {close_error}")
+        if path:
+            try:
+                os.unlink(path)
+            except OSError:
+                logger.warning(f"Başarısız görsel indirme geçici dosyası temizlenemedi: {path}")
 
 def crop_detail(image_path: str) -> str:
     """Orijinal görselin merkezinden %50'lik (altın oran civarı) bir detay kırpar."""
@@ -145,4 +222,3 @@ def create_grid(image_paths: list) -> str:
     except Exception as e:
         logger.error(f"Grid oluşturma başarısız: {e}")
         return None
-

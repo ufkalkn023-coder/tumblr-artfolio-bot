@@ -6,6 +6,10 @@ on:
     - cron: '0 * * * *'
   workflow_dispatch: # Manuel tetiklemeye izin ver
 
+concurrency:
+  group: tumblr-publish
+  cancel-in-progress: false
+
 jobs:
   curate-and-post:
     runs-on: ubuntu-latest
@@ -40,17 +44,41 @@ jobs:
         run: |
           python main.py
 
+      - name: Scoring Telemetry Artifact
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: scoring-telemetry
+          path: output/telemetry/scoring-*.json
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: State Güncelle (posted_ids.json Commit & Push)
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           if [ -n "$(git status --porcelain posted_ids.json)" ]; then
             git add posted_ids.json
             git commit -m "Auto: Update posted_ids.json [skip ci]"
-            git pull --rebase origin main
-            git push
-            echo "posted_ids.json başarıyla repoya güncellendi."
+
+            max_attempts=3
+            for attempt in $(seq 1 "$max_attempts"); do
+              if git pull --rebase origin main && git push origin HEAD:main; then
+                echo "posted_ids.json başarıyla repoya güncellendi."
+                exit 0
+              fi
+
+              if [ "$attempt" -lt "$max_attempts" ]; then
+                delay=$((attempt * 2))
+                echo "State push denemesi $attempt/$max_attempts başarısız; ${delay}s sonra tekrar denenecek."
+                sleep "$delay"
+              fi
+            done
+
+            echo "posted_ids.json $max_attempts denemede repoya gönderilemedi."
+            exit 1
           else
             echo "posted_ids.json dosyasında değişiklik yok."
           fi

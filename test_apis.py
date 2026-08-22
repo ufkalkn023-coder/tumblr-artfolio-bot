@@ -1,25 +1,39 @@
+"""Manual live museum API checks.
+
+This module is intentionally import-safe and is not part of the normal unit
+test suite. Run it directly when live API verification is needed:
+
+    ./venv/bin/python test_apis.py
+"""
+
 import logging
 from museum_api import MuseumAPIClient
 
-logging.basicConfig(level=logging.INFO)
-client = MuseumAPIClient()
 
-print("\n--- TEST: The Met ---")
-met = client.fetch_met_artwork(set())
-print(f"The Met result: {'SUCCESS' if met else 'FAILURE'}")
+def run_live_checks():
+    logging.basicConfig(level=logging.INFO)
+    client = MuseumAPIClient()
+    checks = [
+        ("The Met", client.fetch_met_artwork),
+        ("AIC (Chicago)", client.fetch_aic_artwork),
+        ("CMA (Cleveland)", client.fetch_cma_artwork),
+        ("SMK (Denmark)", client.fetch_smk_artwork),
+        ("Harvard", client.fetch_harvard_artwork),
+    ]
 
-print("\n--- TEST: AIC (Chicago) ---")
-aic = client.fetch_aic_artwork(set())
-print(f"AIC result: {'SUCCESS' if aic else 'FAILURE'}")
+    failures = []
+    for name, fetcher in checks:
+        print(f"\n--- TEST: {name} ---")
+        artwork = fetcher(set())
+        if artwork is None:
+            failures.append(name)
+            print(f"{name} result: FAILURE")
+            continue
+        print(f"{name} result: SUCCESS ({artwork.id})")
 
-print("\n--- TEST: CMA (Cleveland) ---")
-cma = client.fetch_cma_artwork(set())
-print(f"CMA result: {'SUCCESS' if cma else 'FAILURE'}")
+    if failures:
+        raise RuntimeError(f"Live museum API checks failed: {', '.join(failures)}")
 
-print("\n--- TEST: SMK (Denmark) ---")
-smk = client.fetch_smk_artwork(set())
-print(f"SMK result: {'SUCCESS' if smk else 'FAILURE'}")
 
-print("\n--- TEST: Harvard ---")
-harvard = client.fetch_harvard_artwork(set())
-print(f"Harvard result: {'SUCCESS' if harvard else 'FAILURE (Expected if no API key)'}")
+if __name__ == "__main__":
+    run_live_checks()
