@@ -164,7 +164,6 @@ def run_curation_cycle():
                     artwork = None
 
         logger.warning(f"Deneme {attempt}/3 başarısız. 5 saniye sonra tekrar deneniyor...")
-        import time
         time.sleep(5)
 
     if not artwork:
