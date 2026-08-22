@@ -5,7 +5,11 @@ from PIL import Image, ImageOps
 import logging
 import warnings
 
-from http_requests import IMAGE_REQUEST_HEADERS, request_with_bounded_retry
+from http_requests import (
+    IMAGE_REQUEST_HEADERS,
+    RETRYABLE_HTTP_STATUS_CODES,
+    request_with_bounded_retry,
+)
 
 logger = logging.getLogger("artfolio_bot.image_processor")
 
@@ -15,24 +19,49 @@ MAX_IMAGE_PIXELS = 100_000_000
 MAX_IMAGE_DIMENSION = 20_000
 SUPPORTED_IMAGE_MIME_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 DOWNLOAD_CHUNK_SIZE = 64 * 1024
+AIC_IIIF_LARGE_SIZE_SUFFIX = "/full/1686,/0/default.jpg"
+AIC_IIIF_STANDARD_SIZE_SUFFIX = "/full/843,/0/default.jpg"
+AIC_IIIF_RETRYABLE_STATUS_CODES = RETRYABLE_HTTP_STATUS_CODES - {403}
 
 
-def download_image(url: str) -> str:
+def _aic_iiif_fallback_url(url: str) -> str:
+    if url.endswith(AIC_IIIF_LARGE_SIZE_SUFFIX):
+        return f"{url[:-len(AIC_IIIF_LARGE_SIZE_SUFFIX)]}{AIC_IIIF_STANDARD_SIZE_SUFFIX}"
+    return ""
+
+
+def download_image(url: str, *, aic_iiif: bool = False) -> str:
     """Görseli indirir ve geçici bir dosyaya kaydeder."""
     path = None
     response = None
     try:
         logger.info("image_download_start url=%s", url)
-        response = request_with_bounded_retry(
-            lambda: requests.get(
-                url,
-                headers=IMAGE_REQUEST_HEADERS,
-                timeout=IMAGE_DOWNLOAD_TIMEOUT,
-                stream=True,
-            ),
-            endpoint="image_download",
-            logger=logger,
+        retryable_status_codes = (
+            AIC_IIIF_RETRYABLE_STATUS_CODES if aic_iiif else RETRYABLE_HTTP_STATUS_CODES
         )
+
+        def request_image(image_url):
+            return request_with_bounded_retry(
+                lambda: requests.get(
+                    image_url,
+                    headers=IMAGE_REQUEST_HEADERS,
+                    timeout=IMAGE_DOWNLOAD_TIMEOUT,
+                    stream=True,
+                ),
+                endpoint="aic_iiif_download" if aic_iiif else "image_download",
+                logger=logger,
+                retryable_status_codes=retryable_status_codes,
+            )
+
+        response = request_image(url)
+        downloaded_url = url
+        fallback_url = _aic_iiif_fallback_url(url) if aic_iiif else ""
+        if response.status_code == 403 and fallback_url:
+            response.close()
+            logger.info("aic_iiif_fallback primary=%s fallback=%s", url, fallback_url)
+            response = request_image(fallback_url)
+            downloaded_url = fallback_url
+
         content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
         if response.status_code != 200:
             raise ValueError(f"HTTP status {response.status_code}")
@@ -75,7 +104,7 @@ def download_image(url: str) -> str:
 
         logger.info(
             "image_download_success url=%s mime=%s bytes=%d dimensions=%dx%d",
-            url,
+            downloaded_url,
             content_type,
             os.path.getsize(path),
             width,

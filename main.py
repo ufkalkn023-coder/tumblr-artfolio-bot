@@ -137,7 +137,10 @@ def run_curation_cycle():
             logger.info(f"Görsel URL: {artwork.image_url}")
             
             if artwork.image_url:
-                main_img = image_processor.download_image(artwork.image_url)
+                main_img = image_processor.download_image(
+                    artwork.image_url,
+                    aic_iiif=artwork.museum == "aic",
+                )
                 if main_img:
                     effect = random.choices(["none", "detail", "passepartout", "wallpaper"], weights=[50, 30, 10, 10], k=1)[0]
                     

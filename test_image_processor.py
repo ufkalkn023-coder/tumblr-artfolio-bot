@@ -1,5 +1,6 @@
 import io
 import os
+import random
 import unittest
 from unittest.mock import patch
 
@@ -83,6 +84,62 @@ class TestImageDownloadSafety(unittest.TestCase):
         self.assertIsNone(path)
         self.assertEqual(get.call_count, MAX_TRANSIENT_HTTP_ATTEMPTS)
         self.assertEqual(sleep.call_count, MAX_TRANSIENT_HTTP_ATTEMPTS - 1)
+
+    def test_aic_1686_success_uses_the_primary_url_without_fallback(self):
+        primary_url = "https://images.example/iiif/2/image-id/full/1686,/0/default.jpg"
+        success = FakeImageResponse(image_bytes("JPEG"))
+
+        with patch("image_processor.requests.get", return_value=success) as get, \
+                patch("http_requests.time.sleep") as sleep:
+            path = image_processor.download_image(primary_url, aic_iiif=True)
+
+        self.assert_downloaded_image_is_removed(path)
+        self.assertEqual([call.args[0] for call in get.call_args_list], [primary_url])
+        sleep.assert_not_called()
+
+    def test_aic_1686_403_falls_back_once_to_843_without_retrying_1686(self):
+        primary_url = "https://images.example/iiif/2/image-id/full/1686,/0/default.jpg"
+        fallback_url = "https://images.example/iiif/2/image-id/full/843,/0/default.jpg"
+        blocked = FakeImageResponse(b"", status_code=403)
+        success = FakeImageResponse(image_bytes("JPEG"))
+        state_before = random.getstate()
+
+        with patch("image_processor.requests.get", side_effect=[blocked, success]) as get, \
+                patch("http_requests.time.sleep") as sleep:
+            path = image_processor.download_image(primary_url, aic_iiif=True)
+
+        self.assert_downloaded_image_is_removed(path)
+        self.assertEqual([call.args[0] for call in get.call_args_list], [primary_url, fallback_url])
+        sleep.assert_not_called()
+        self.assertEqual(state_before, random.getstate())
+
+    def test_aic_843_failure_after_fallback_returns_clean_failure(self):
+        primary_url = "https://images.example/iiif/2/image-id/full/1686,/0/default.jpg"
+        fallback_url = "https://images.example/iiif/2/image-id/full/843,/0/default.jpg"
+        responses = [FakeImageResponse(b"", status_code=403), FakeImageResponse(b"", status_code=403)]
+
+        with patch("image_processor.requests.get", side_effect=responses) as get, \
+                patch("http_requests.time.sleep") as sleep:
+            path = image_processor.download_image(primary_url, aic_iiif=True)
+
+        self.assertIsNone(path)
+        self.assertEqual([call.args[0] for call in get.call_args_list], [primary_url, fallback_url])
+        sleep.assert_not_called()
+
+    def test_aic_iiif_transient_429_and_5xx_keep_bounded_retry(self):
+        image_url = "https://images.example/iiif/2/image-id/full/843,/0/default.jpg"
+        for status_code in (429, 500):
+            with self.subTest(status_code=status_code):
+                transient_error = FakeImageResponse(b"", status_code=status_code)
+                success = FakeImageResponse(image_bytes("JPEG"))
+
+                with patch("image_processor.requests.get", side_effect=[transient_error, success]) as get, \
+                        patch("http_requests.time.sleep") as sleep:
+                    path = image_processor.download_image(image_url, aic_iiif=True)
+
+                self.assert_downloaded_image_is_removed(path)
+                self.assertEqual(get.call_count, 2)
+                sleep.assert_called_once()
 
     def test_valid_png_is_accepted(self):
         response = FakeImageResponse(image_bytes("PNG"), content_type="image/png")

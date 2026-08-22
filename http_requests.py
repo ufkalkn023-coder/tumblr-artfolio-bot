@@ -16,13 +16,19 @@ RETRYABLE_HTTP_STATUS_CODES = frozenset({403, 429, 500, 502, 503, 504})
 MAX_TRANSIENT_HTTP_ATTEMPTS = 3
 
 
-def request_with_bounded_retry(request, *, endpoint: str, logger):
+def request_with_bounded_retry(
+    request,
+    *,
+    endpoint: str,
+    logger,
+    retryable_status_codes=RETRYABLE_HTTP_STATUS_CODES,
+):
     """Retry only transient HTTP statuses with a short, bounded backoff."""
     for attempt in range(1, MAX_TRANSIENT_HTTP_ATTEMPTS + 1):
         response = request()
         status_code = response.status_code
         if (
-            status_code not in RETRYABLE_HTTP_STATUS_CODES
+            status_code not in retryable_status_codes
             or attempt == MAX_TRANSIENT_HTTP_ATTEMPTS
         ):
             return response

@@ -7,7 +7,13 @@ from unittest.mock import Mock, patch
 
 import requests
 
-from museum_api import MuseumAPIClient, Artwork, ArtworkScorer, MINIMUM_QUALITY_SCORE
+from museum_api import (
+    Artwork,
+    ArtworkScorer,
+    MINIMUM_QUALITY_SCORE,
+    MuseumAPIClient,
+    build_aic_iiif_image_url,
+)
 from tumblr_poster import (
     TumblrPoster,
     artist_internal_tag,
@@ -129,10 +135,12 @@ class TestTumblrBot(unittest.TestCase):
                 "artwork_type_title": "Painting",
                 "medium_display": "Oil on canvas",
                 "classification_title": "Paintings",
+                "is_public_domain": True,
                 "is_boosted": True,
                 "is_on_view": True,
                 "style_title": "Renaissance",
-            }]
+            }],
+            "config": {"iiif_url": "https://images.example/iiif/2"},
         }))
 
         artwork = self.museum_client.fetch_aic_artwork(posted_ids=set())
@@ -140,7 +148,32 @@ class TestTumblrBot(unittest.TestCase):
         self.assertIsNotNone(artwork)
         self.assertEqual(artwork.museum, "aic")
         self.assertGreaterEqual(artwork.score, MINIMUM_QUALITY_SCORE)
-        self.assertTrue(artwork.image_url.startswith("https://www.artic.edu/iiif/2/"))
+        self.assertEqual(
+            artwork.image_url,
+            "https://images.example/iiif/2/test-image/full/1686,/0/default.jpg",
+        )
+
+    def test_aic_unknown_or_nonpublic_artwork_uses_standard_iiif_size(self):
+        self.museum_client.session.post = Mock(return_value=FakeResponse({
+            "config": {"iiif_url": "https://images.example/iiif/2"},
+            "data": [{
+                "id": 457, "title": "The Test Painting", "artist_display": "Leonardo da Vinci",
+                "date_display": "1503", "image_id": "nonpublic-image", "artwork_type_title": "Painting",
+                "medium_display": "Oil on canvas", "classification_title": "Paintings",
+                "is_public_domain": False, "is_boosted": True, "is_on_view": True,
+            }],
+        }))
+
+        artwork = self.museum_client.fetch_aic_artwork(posted_ids=set())
+
+        self.assertEqual(
+            artwork.image_url,
+            "https://images.example/iiif/2/nonpublic-image/full/843,/0/default.jpg",
+        )
+        self.assertEqual(
+            build_aic_iiif_image_url("unknown-image", "https://images.example/iiif/2", None),
+            "https://images.example/iiif/2/unknown-image/full/843,/0/default.jpg",
+        )
 
     def test_aic_metadata_request_retries_transient_403_with_json_headers(self):
         blocked = Mock(status_code=403)

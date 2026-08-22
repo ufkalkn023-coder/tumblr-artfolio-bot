@@ -19,6 +19,9 @@ logger = logging.getLogger("artfolio_bot.museum_api")
 
 HTTP_TIMEOUT = 20
 MINIMUM_QUALITY_SCORE = 60
+AIC_DEFAULT_IIIF_URL = "https://www.artic.edu/iiif/2"
+AIC_STANDARD_IMAGE_SIZE = 843
+AIC_LARGE_PUBLIC_DOMAIN_IMAGE_SIZE = 1686
 
 # Dünya çapında tanınan usta sanatçılar listesi (Puanlama bonusu için)
 FAMOUS_ARTISTS = {
@@ -49,6 +52,15 @@ def classify_secondary_telemetry_label(raw_medium: str, classification: str, obj
     if any(term in text for term in ("decorative art", "decorative arts", "artifact", "vessel", "object")):
         matches.add("decorative/object")
     return matches.pop() if len(matches) == 1 else "other"
+
+
+def build_aic_iiif_image_url(image_id: str, iiif_url: str = None, is_public_domain: bool = False) -> str:
+    """Build an AIC IIIF URL using the API-provided endpoint when available."""
+    if not image_id:
+        return ""
+    base_url = (iiif_url or AIC_DEFAULT_IIIF_URL).rstrip("/")
+    size = AIC_LARGE_PUBLIC_DOMAIN_IMAGE_SIZE if is_public_domain is True else AIC_STANDARD_IMAGE_SIZE
+    return f"{base_url}/{image_id}/full/{size},/0/default.jpg"
 
 
 class ScoringTelemetry:
@@ -535,7 +547,7 @@ class MuseumAPIClient:
         except Exception as exc:
             logger.debug("pool_telemetry source=%s candidate_score_skipped type=%s", source, type(exc).__name__)
 
-    def _record_aic_pool(self, artworks, posted_ids: Set[str]):
+    def _record_aic_pool(self, artworks, posted_ids: Set[str], iiif_url: str = None):
         source = "aic"
         self._set_pool_coverage(source, "full", len(artworks))
         self.pool_telemetry.record_duplicate(
@@ -546,7 +558,11 @@ class MuseumAPIClient:
             if artwork_id in posted_ids:
                 continue
             image_id = item.get("image_id")
-            image_url = f"https://www.artic.edu/iiif/2/{image_id}/full/1686,/0/default.jpg" if image_id else ""
+            image_url = build_aic_iiif_image_url(
+                image_id,
+                iiif_url,
+                item.get("is_public_domain", False),
+            )
             artist_raw = (item.get("artist_display") or "").strip() or "Unknown Artist"
             self._record_pool_candidate(
                 source,
@@ -906,6 +922,7 @@ class MuseumAPIClient:
 
             data = resp.json()
             artworks = data.get("data", [])
+            iiif_url = (data.get("config") or {}).get("iiif_url")
             if not artworks:
                 self._log_fetch_stats(stats)
                 return None
@@ -913,7 +930,7 @@ class MuseumAPIClient:
             stats["candidates"] = len(artworks)
             stats["duplicates"] = sum(1 for item in artworks if str(item.get("id")) in posted_ids)
             self.scoring_telemetry.record_duplicate("aic", stats["duplicates"])
-            self._safe_pool_operation(self._record_aic_pool, artworks, posted_ids)
+            self._safe_pool_operation(self._record_aic_pool, artworks, posted_ids, iiif_url)
             logger.info("source=aic candidate_response_count=%d", stats["candidates"])
 
             random.shuffle(artworks)
@@ -929,7 +946,11 @@ class MuseumAPIClient:
                     stats["rejected_image"] += 1
                     continue
 
-                image_url = f"https://www.artic.edu/iiif/2/{image_id}/full/1686,/0/default.jpg"
+                image_url = build_aic_iiif_image_url(
+                    image_id,
+                    iiif_url,
+                    item.get("is_public_domain", False),
+                )
                 title = (item.get("title") or "Untitled").strip() or "Untitled"
                 artist_raw = (item.get("artist_display") or "").strip() or "Unknown Artist"
                 artist = artist_raw.split("\n")[0].strip()
