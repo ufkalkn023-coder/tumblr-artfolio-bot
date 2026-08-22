@@ -3,7 +3,7 @@ test_bot.py - 85/100 Kalite Puanlama Sistemi, Müze API'leri ve Formatlama Testl
 """
 
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import requests
 
@@ -18,6 +18,7 @@ from tumblr_poster import (
     normalize_medium_display,
 )
 import config
+from http_requests import JSON_REQUEST_HEADERS, MAX_TRANSIENT_HTTP_ATTEMPTS
 
 
 class FakeResponse:
@@ -140,6 +141,38 @@ class TestTumblrBot(unittest.TestCase):
         self.assertEqual(artwork.museum, "aic")
         self.assertGreaterEqual(artwork.score, MINIMUM_QUALITY_SCORE)
         self.assertTrue(artwork.image_url.startswith("https://www.artic.edu/iiif/2/"))
+
+    def test_aic_metadata_request_retries_transient_403_with_json_headers(self):
+        blocked = Mock(status_code=403)
+        success = FakeResponse({
+            "data": [{
+                "id": 456, "title": "The Test Painting", "artist_display": "Leonardo da Vinci",
+                "date_display": "1503", "image_id": "test-image", "artwork_type_title": "Painting",
+                "medium_display": "Oil on canvas", "classification_title": "Paintings",
+                "is_boosted": True, "is_on_view": True,
+            }]
+        })
+        self.museum_client.session.post = Mock(side_effect=[blocked, success])
+
+        with patch("http_requests.time.sleep") as sleep, \
+                patch("museum_api.random.shuffle", side_effect=lambda values: None):
+            artwork = self.museum_client.fetch_aic_artwork(set())
+
+        self.assertIsNotNone(artwork)
+        self.assertEqual(self.museum_client.session.post.call_count, 2)
+        self.assertEqual(self.museum_client.session.post.call_args.kwargs["headers"], JSON_REQUEST_HEADERS)
+        sleep.assert_called_once()
+
+    def test_aic_metadata_persistent_403_fails_cleanly_after_bounded_retries(self):
+        blocked_responses = [Mock(status_code=403) for _ in range(MAX_TRANSIENT_HTTP_ATTEMPTS)]
+        self.museum_client.session.post = Mock(side_effect=blocked_responses)
+
+        with patch("http_requests.time.sleep") as sleep:
+            artwork = self.museum_client.fetch_aic_artwork(set())
+
+        self.assertIsNone(artwork)
+        self.assertEqual(self.museum_client.session.post.call_count, MAX_TRANSIENT_HTTP_ATTEMPTS)
+        self.assertEqual(sleep.call_count, MAX_TRANSIENT_HTTP_ATTEMPTS - 1)
 
     def test_cma_api_fetch_with_score(self):
         """CMA fixture'ından geçerli ve yeterli puanlı eser seçilir."""

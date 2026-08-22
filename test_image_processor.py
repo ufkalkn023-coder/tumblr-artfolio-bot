@@ -6,6 +6,7 @@ from unittest.mock import patch
 from PIL import Image
 
 import image_processor
+from http_requests import IMAGE_REQUEST_HEADERS, MAX_TRANSIENT_HTTP_ATTEMPTS
 
 
 class FakeImageResponse:
@@ -33,7 +34,8 @@ def image_bytes(image_format):
 
 class TestImageDownloadSafety(unittest.TestCase):
     def download_with_response(self, response):
-        with patch("image_processor.requests.get", return_value=response):
+        with patch("image_processor.requests.get", return_value=response), \
+                patch("http_requests.time.sleep"):
             return image_processor.download_image("https://example.com/image")
 
     def assert_downloaded_image_is_removed(self, path):
@@ -48,6 +50,39 @@ class TestImageDownloadSafety(unittest.TestCase):
 
         self.assert_downloaded_image_is_removed(path)
         self.assertTrue(response.closed)
+
+    def test_image_request_uses_explicit_image_headers(self):
+        response = FakeImageResponse(image_bytes("JPEG"))
+
+        with patch("image_processor.requests.get", return_value=response) as get, \
+                patch("http_requests.time.sleep"):
+            path = image_processor.download_image("https://example.com/image")
+
+        self.assert_downloaded_image_is_removed(path)
+        self.assertEqual(get.call_args.kwargs["headers"], IMAGE_REQUEST_HEADERS)
+
+    def test_transient_403_is_retried_before_a_successful_image_download(self):
+        blocked = FakeImageResponse(b"", status_code=403)
+        success = FakeImageResponse(image_bytes("JPEG"))
+
+        with patch("image_processor.requests.get", side_effect=[blocked, success]) as get, \
+                patch("http_requests.time.sleep") as sleep:
+            path = image_processor.download_image("https://example.com/image")
+
+        self.assert_downloaded_image_is_removed(path)
+        self.assertEqual(get.call_count, 2)
+        sleep.assert_called_once()
+
+    def test_persistent_403_fails_cleanly_after_bounded_retries(self):
+        responses = [FakeImageResponse(b"", status_code=403) for _ in range(MAX_TRANSIENT_HTTP_ATTEMPTS)]
+
+        with patch("image_processor.requests.get", side_effect=responses) as get, \
+                patch("http_requests.time.sleep") as sleep:
+            path = image_processor.download_image("https://example.com/image")
+
+        self.assertIsNone(path)
+        self.assertEqual(get.call_count, MAX_TRANSIENT_HTTP_ATTEMPTS)
+        self.assertEqual(sleep.call_count, MAX_TRANSIENT_HTTP_ATTEMPTS - 1)
 
     def test_valid_png_is_accepted(self):
         response = FakeImageResponse(image_bytes("PNG"), content_type="image/png")

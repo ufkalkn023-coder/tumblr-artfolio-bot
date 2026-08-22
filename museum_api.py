@@ -13,11 +13,11 @@ from typing import Optional, Dict, List, Set, Tuple
 import requests
 
 import config
+from http_requests import JSON_REQUEST_HEADERS, request_with_bounded_retry
 
 logger = logging.getLogger("artfolio_bot.museum_api")
 
 HTTP_TIMEOUT = 20
-USER_AGENT = "artfolio-bot/1.0 (Tumblr Art Curation Bot)"
 MINIMUM_QUALITY_SCORE = 60
 
 # Dünya çapında tanınan usta sanatçılar listesi (Puanlama bonusu için)
@@ -207,7 +207,7 @@ class ScoringTelemetry:
                 bucket["duplicates"], bucket["eligible"], bucket["scored"] - bucket["eligible"], self._average(bucket),
                 bucket["min"] if bucket["min"] is not None else "n/a", bucket["max"] if bucket["max"] is not None else "n/a", bands,
             )
-            category_map = getattr(self, "source_categories", {}).get(source, self.categories)
+            category_map = getattr(self, "source_categories", {}).get(source, {})
             for category in ("Painting", "Sculpture", "Drawing", "Object"):
                 category_bucket = category_map.get(category, self._new_bucket())
                 logger.info(
@@ -215,7 +215,7 @@ class ScoringTelemetry:
                     source, category, category_bucket["evaluated"], category_bucket["eligible"], self._average(category_bucket),
                 )
 
-            secondary_map = getattr(self, "source_secondary_categories", {}).get(source, self.secondary_categories)
+            secondary_map = getattr(self, "source_secondary_categories", {}).get(source, {})
             for category in sorted(secondary_map):
                 category_bucket = secondary_map[category]
                 logger.info(
@@ -223,7 +223,7 @@ class ScoringTelemetry:
                     source, category, category_bucket["evaluated"], category_bucket["eligible"], self._average(category_bucket),
                 )
 
-            artist_map = getattr(self, "source_artists", {}).get(source, self.artists)
+            artist_map = getattr(self, "source_artists", {}).get(source, {})
             known = artist_map.get("known", self._new_bucket())
             unknown = artist_map.get("unknown", self._new_bucket())
             known_rate = "n/a" if not known["evaluated"] else f"{known['eligible'] / known['evaluated']:.1%}"
@@ -234,7 +234,7 @@ class ScoringTelemetry:
                 unknown["evaluated"], unknown["eligible"], unknown_rate, self._average(unknown),
             )
 
-            flag_map = getattr(self, "source_flags", {}).get(source, self.flags)
+            flag_map = getattr(self, "source_flags", {}).get(source, {})
             for flag in ("highlight", "on_view", "additional_images"):
                 flag_bucket = flag_map.get(flag, self._new_bucket())
                 logger.info(
@@ -257,10 +257,7 @@ class CandidatePoolTelemetry(ScoringTelemetry):
         return source_buckets.setdefault(key, ScoringTelemetry._new_bucket())
 
     def record_scored(self, source, raw_medium, classification, object_name, artist, score, is_highlight, on_view, has_additional_images):
-        super().record_scored(
-            source, raw_medium, classification, object_name, artist, score,
-            is_highlight, on_view, has_additional_images,
-        )
+        self._record_score(self._source_bucket(source), score)
 
         category = ArtworkScorer.classify_medium(raw_medium, classification, object_name)
         category_bucket = self._dimension_bucket(self.source_categories, source, category)
@@ -452,7 +449,7 @@ class MuseumAPIClient:
 
     def __init__(self):
         self.session = requests.Session()
-        self.session.headers.update({"User-Agent": USER_AGENT})
+        self.session.headers.update(JSON_REQUEST_HEADERS)
         self.last_fetch_stats = {}
         self.scoring_telemetry = ScoringTelemetry()
         self.pool_telemetry = CandidatePoolTelemetry()
@@ -481,10 +478,17 @@ class MuseumAPIClient:
             telemetry_file.write("\n")
 
     def _set_pool_coverage(self, source: str, coverage: str, materialized: int):
-        self.pool_coverage[source] = {
-            "coverage": coverage,
-            "materialized": materialized,
-        }
+        existing = self.pool_coverage.get(source)
+        if existing is None:
+            self.pool_coverage[source] = {
+                "coverage": coverage,
+                "materialized": materialized,
+            }
+            return
+
+        existing["materialized"] += materialized
+        if existing["coverage"] != coverage:
+            existing["coverage"] = "partial"
 
     def _safe_pool_operation(self, operation, *args):
         """Telemetry failures must never change the production fetch path."""
@@ -719,7 +723,7 @@ class MuseumAPIClient:
             stats["candidates"] = len(object_ids)
             stats["duplicates"] = sum(1 for oid in object_ids if str(oid) in posted_ids)
             self.scoring_telemetry.record_duplicate("met", stats["duplicates"])
-            self.pool_coverage["met"] = {"coverage": "partial", "materialized": 0}
+            self._set_pool_coverage("met", "partial", 0)
             self._safe_pool_operation(self.pool_telemetry.record_duplicate, "met", stats["duplicates"])
             logger.info("source=met candidate_response_count=%d", stats["candidates"])
 
@@ -885,7 +889,16 @@ class MuseumAPIClient:
         }
 
         try:
-            resp = self.session.post(search_url, json=payload, timeout=HTTP_TIMEOUT)
+            resp = request_with_bounded_retry(
+                lambda: self.session.post(
+                    search_url,
+                    json=payload,
+                    headers=JSON_REQUEST_HEADERS,
+                    timeout=HTTP_TIMEOUT,
+                ),
+                endpoint="aic_metadata",
+                logger=logger,
+            )
             if resp.status_code != 200:
                 logger.error("source=aic api_failure type=http_status status=%s", resp.status_code)
                 logger.warning(f"AIC arama hatası: HTTP {resp.status_code}")
@@ -1420,5 +1433,8 @@ class MuseumAPIClient:
             "selection_summary source=none candidates=%d duplicates=%d rejected_quality=%d eligible=%d selected=none",
             run_stats["candidates"], run_stats["duplicates"], run_stats["rejected_quality"], run_stats["eligible"],
         )
-        logger.error("Hiçbir müze API'sinden 65/100 kriterini sağlayan bir eser bulunamadı!")
+        logger.error(
+            "Hiçbir müze API'sinden %d/100 kriterini sağlayan bir eser bulunamadı!",
+            MINIMUM_QUALITY_SCORE,
+        )
         return None

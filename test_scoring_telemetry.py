@@ -185,6 +185,40 @@ class TestScoringTelemetry(unittest.TestCase):
         self.assertTrue(any(message.startswith("pool_category_stats source=aic category=Painting") for message in messages))
         self.assertTrue(any(message.startswith("pool_artist_stats source=aic") for message in messages))
 
+    def test_pool_source_dimensions_are_isolated_and_repeated_coverage_is_totaled(self):
+        client = MuseumAPIClient()
+        client._record_aic_pool([{
+            "id": 1, "title": "Eligible AIC", "artist_display": "Leonardo da Vinci",
+            "date_display": "1503", "image_id": "aic-image", "artwork_type_title": "Painting",
+            "medium_display": "Oil on canvas", "classification_title": "Paintings",
+            "is_boosted": True, "is_on_view": True,
+        }], set())
+        smk_artwork = {
+            "object_number": "smk-1", "image_native": "https://example.com/smk.jpg",
+            "titles": [{"title": "Low SMK Object"}], "production": [], "production_date": [],
+            "techniques": ["Wood"], "object_names": [{"name": "Object"}], "on_display": False,
+        }
+        second_smk_artwork = dict(smk_artwork, object_number="smk-2")
+        client._record_smk_pool([smk_artwork], set())
+        client._record_smk_pool([second_smk_artwork], set())
+
+        aic = client.pool_telemetry.sources["aic"]
+        smk = client.pool_telemetry.sources["smk"]
+        self.assertEqual(client.pool_coverage["aic"]["materialized"], 1)
+        self.assertEqual(client.pool_coverage["smk"]["materialized"], 2)
+        self.assertEqual(smk["evaluated"], 2)
+        self.assertEqual(smk["scored"], 2)
+        self.assertEqual(smk["eligible"], 0)
+        self.assertEqual(aic["eligible"], 1)
+        self.assertEqual(client.pool_telemetry.source_flags["aic"]["on_view"]["eligible"], 1)
+        self.assertNotIn("on_view", client.pool_telemetry.source_flags.get("smk", {}))
+        self.assertEqual(client.pool_telemetry.source_categories["smk"]["Object"]["eligible"], 0)
+
+        logger = Mock()
+        client.pool_telemetry.log_pool(logger, client.pool_coverage)
+        messages = [call.args[0] % call.args[1:] if len(call.args) > 1 else call.args[0] for call in logger.info.call_args_list]
+        self.assertIn("pool_flag_stats source=smk flag=on_view evaluated=0 eligible=0 avg=n/a", messages)
+
     def test_json_export_has_aggregate_schema_and_publish_status(self):
         client = MuseumAPIClient()
         client.scoring_telemetry.record_attempt("aic")

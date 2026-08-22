@@ -5,6 +5,8 @@ from PIL import Image, ImageOps
 import logging
 import warnings
 
+from http_requests import IMAGE_REQUEST_HEADERS, request_with_bounded_retry
+
 logger = logging.getLogger("artfolio_bot.image_processor")
 
 IMAGE_DOWNLOAD_TIMEOUT = 30
@@ -20,13 +22,16 @@ def download_image(url: str) -> str:
     path = None
     response = None
     try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
         logger.info("image_download_start url=%s", url)
-        response = requests.get(
-            url,
-            headers=headers,
-            timeout=IMAGE_DOWNLOAD_TIMEOUT,
-            stream=True,
+        response = request_with_bounded_retry(
+            lambda: requests.get(
+                url,
+                headers=IMAGE_REQUEST_HEADERS,
+                timeout=IMAGE_DOWNLOAD_TIMEOUT,
+                stream=True,
+            ),
+            endpoint="image_download",
+            logger=logger,
         )
         content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
         if response.status_code != 200:
