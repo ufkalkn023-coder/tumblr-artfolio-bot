@@ -20,6 +20,38 @@ from datetime import datetime, timezone
 logger = config.setup_logging()
 
 
+def is_content_type_enabled(content_type: str) -> bool:
+    """Return whether a configured content type may be used in production."""
+    return config.CONTENT_WEIGHTS.get(content_type, 0) > 0
+
+
+def get_enabled_content_types() -> List[str]:
+    """Return configured content types with a positive production weight."""
+    return [content_type for content_type in config.CONTENT_WEIGHTS if is_content_type_enabled(content_type)]
+
+
+def get_highest_weight_content_type(exclude: str = None) -> str:
+    """Return the highest-weight enabled content type, optionally excluding one."""
+    candidates = [content_type for content_type in get_enabled_content_types() if content_type != exclude]
+    return max(candidates, key=lambda content_type: config.CONTENT_WEIGHTS[content_type]) if candidates else None
+
+
+def build_curation_attempt_media(initial_medium: str, attempts: int = 3) -> List[str]:
+    """Build the deterministic category plan used when curation needs fallback."""
+    if not is_content_type_enabled(initial_medium):
+        raise ValueError(f"Disabled content type cannot be selected: {initial_medium}")
+
+    fallback_medium = get_highest_weight_content_type(exclude=initial_medium) or initial_medium
+    reliability_medium = get_highest_weight_content_type()
+    return [initial_medium, fallback_medium, reliability_medium][:attempts]
+
+
+def apply_scheduled_medium_theme(selected_medium: str, weekday: int) -> str:
+    """Apply an enabled weekday theme without reviving disabled content types."""
+    themed_medium = {0: "Sculpture", 2: "Drawing"}.get(weekday)
+    return themed_medium if themed_medium and is_content_type_enabled(themed_medium) else selected_medium
+
+
 def export_scoring_telemetry(museum_client, publish_success, output_dir=Path("output/telemetry")):
     """Write run telemetry without allowing export failures to affect publishing."""
     timestamp = datetime.now(timezone.utc)
@@ -98,19 +130,25 @@ def run_curation_cycle():
     # 2. Müzelerden Uygun Eser Çek (Hata payına karşı 3 defa deneme)
     import random
     
-    # Hedef tür belirleme (Yüzdelik oranlara göre)
-    mediums = list(config.CONTENT_WEIGHTS.keys())
-    weights = list(config.CONTENT_WEIGHTS.values())
-    target_medium = random.choices(mediums, weights=weights, k=1)[0]
+    # Hedef tür belirleme (yalnızca etkin yüzdelik oranlara göre)
+    enabled_mediums = get_enabled_content_types()
+    if not enabled_mediums:
+        logger.error("Kürasyon döngüsü iptal: etkin içerik türü yapılandırılmamış.")
+        sys.exit(1)
+    weights = [config.CONTENT_WEIGHTS[medium] for medium in enabled_mediums]
+    target_medium = random.choices(enabled_mediums, weights=weights, k=1)[0]
     
     # Feature 9: Tematik Günler (Zamanlanmış Yayın)
     weekday = datetime.today().weekday()
-    if weekday == 0:  # Marble Monday
-        target_medium = "Sculpture"
-    elif weekday == 2:  # Watercolor Wednesday (veya genel Çizim)
-        target_medium = "Drawing"
+    target_medium = apply_scheduled_medium_theme(target_medium, weekday)
         
-    logger.info(f"Rastgele belirlenen hedef eser türü: {target_medium} (Gün: {weekday})")
+    attempt_media = build_curation_attempt_media(target_medium)
+    logger.info(
+        "curation_target original_medium=%s weekday=%d attempt_media=%s",
+        target_medium,
+        weekday,
+        ",".join(attempt_media),
+    )
 
     museum_client = MuseumAPIClient()
     artwork = None
@@ -124,12 +162,33 @@ def run_curation_cycle():
     }
     
     image_paths = None
-    for attempt in range(1, 4):
-        artwork = museum_client.get_random_artwork(posted_data, target_medium)
+    attempted_media = []
+    for attempt, attempt_medium in enumerate(attempt_media, start=1):
+        fallback_used = attempt_medium != target_medium
+        if attempt > 1 and attempt_medium != attempt_media[attempt - 2]:
+            logger.info(
+                "medium_fallback from=%s to=%s reason=no_eligible_artwork",
+                attempt_media[attempt - 2],
+                attempt_medium,
+            )
+        attempted_media.append(attempt_medium)
+        logger.info(
+            "curation_attempt=%d/3 target_medium=%s fallback=%s",
+            attempt,
+            attempt_medium,
+            str(fallback_used).lower(),
+        )
+        artwork = museum_client.get_random_artwork(posted_data, attempt_medium)
         selection_stats = getattr(museum_client, "last_run_stats", {})
         for key in ("candidates", "duplicates", "rejected_image", "rejected_quality", "eligible"):
             cycle_stats[key] += selection_stats.get(key, 0)
-        logger.info("curation_attempt=%d/3 source=%s selected=%s", attempt, selection_stats.get("source", "none"), getattr(artwork, "id", "none"))
+        logger.info(
+            "curation_attempt_result=%d/3 target_medium=%s source=%s selected=%s",
+            attempt,
+            attempt_medium,
+            selection_stats.get("source", "none"),
+            getattr(artwork, "id", "none"),
+        )
         if artwork:
             cycle_stats["source"] = artwork.museum
             logger.info(f"Seçilen Eser: '{artwork.title}' | Sanatçı: {artwork.artist} | Müze: {artwork.museum_name}")
@@ -166,15 +225,16 @@ def run_curation_cycle():
                     logger.error("Görsel indirilemediği için bu eser atlanıyor, yeni bir eser aranacak...")
                     artwork = None
 
-        logger.warning(f"Deneme {attempt}/3 başarısız. 5 saniye sonra tekrar deneniyor...")
-        time.sleep(5)
+        if attempt < len(attempt_media):
+            logger.warning(f"Deneme {attempt}/3 başarısız. 5 saniye sonra tekrar deneniyor...")
+            time.sleep(5)
 
     if not artwork:
         export_scoring_telemetry(museum_client, publish_success=False)
         museum_client.log_scoring_telemetry()
         logger.info(
-            "run_summary source=none candidates=%d duplicates=%d rejected_quality=%d eligible=%d selected=none published=no duration=%.2fs",
-            cycle_stats["candidates"], cycle_stats["duplicates"], cycle_stats["rejected_quality"],
+            "run_summary original_medium=%s attempted_media=%s source=none candidates=%d duplicates=%d rejected_quality=%d eligible=%d selected=none published=no duration=%.2fs",
+            target_medium, ",".join(attempted_media), cycle_stats["candidates"], cycle_stats["duplicates"], cycle_stats["rejected_quality"],
             cycle_stats["eligible"], time.monotonic() - run_started_at,
         )
         logger.error("Kürasyon döngüsü iptal: 3 denemenin ardından geçerli ve paylaşılmamış bir eser bulunamadı.")
@@ -215,8 +275,8 @@ def run_curation_cycle():
         export_scoring_telemetry(museum_client, publish_success=True)
         museum_client.log_scoring_telemetry()
         logger.info(
-            "run_summary source=%s candidates=%d duplicates=%d rejected_quality=%d eligible=%d selected=%s published=yes duration=%.2fs",
-            cycle_stats["source"], cycle_stats["candidates"], cycle_stats["duplicates"],
+            "run_summary original_medium=%s attempted_media=%s selected_medium=%s source=%s candidates=%d duplicates=%d rejected_quality=%d eligible=%d selected=%s published=yes duration=%.2fs",
+            target_medium, ",".join(attempted_media), artwork.medium_type, cycle_stats["source"], cycle_stats["candidates"], cycle_stats["duplicates"],
             cycle_stats["rejected_quality"], cycle_stats["eligible"], artwork.id,
             time.monotonic() - run_started_at,
         )
@@ -225,8 +285,8 @@ def run_curation_cycle():
         export_scoring_telemetry(museum_client, publish_success=False)
         museum_client.log_scoring_telemetry()
         logger.info(
-            "run_summary source=%s candidates=%d duplicates=%d rejected_quality=%d eligible=%d selected=%s published=no duration=%.2fs",
-            cycle_stats["source"], cycle_stats["candidates"], cycle_stats["duplicates"],
+            "run_summary original_medium=%s attempted_media=%s selected_medium=%s source=%s candidates=%d duplicates=%d rejected_quality=%d eligible=%d selected=%s published=no duration=%.2fs",
+            target_medium, ",".join(attempted_media), artwork.medium_type, cycle_stats["source"], cycle_stats["candidates"], cycle_stats["duplicates"],
             cycle_stats["rejected_quality"], cycle_stats["eligible"], artwork.id,
             time.monotonic() - run_started_at,
         )
