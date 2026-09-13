@@ -4,8 +4,8 @@ Resim, Heykel, Çizim ve Değerli Objeler için dinamik SEO etiketleme ve açık
 """
 
 import re
-import random
 import logging
+from dataclasses import dataclass
 from html import escape
 from typing import List, Optional
 import pytumblr
@@ -13,6 +13,29 @@ from museum_api import Artwork
 import config
 
 logger = logging.getLogger("artfolio_bot.tumblr_poster")
+
+
+@dataclass
+class PublishResult:
+    """Tumblr publish çağrısının yapılandırılmış sonucu.
+
+    bool olarak da kullanılabilir (if result: == result.success) ancak
+    üretim kodunda result.success açıkça okunmalıdır.
+    """
+
+    success: bool
+    post_id: str = ""
+    status_code: Optional[int] = None
+    error: str = ""
+
+    def __bool__(self) -> bool:
+        return self.success
+
+
+def _sanitize_error(value, limit: int = 200) -> str:
+    """Hata metnini tek satıra indirip kısaltır; gizli bilgi taşımayan kısa özet."""
+    text = " ".join(str(value or "").split())
+    return text[:limit]
 
 _PROTECTED_ARTIST_TERMS = (
     "unknown", "anonymous", "workshop of", "studio of", "attributed to",
@@ -91,7 +114,7 @@ def normalize_dimensions(value) -> str:
     simple_match = _SIMPLE_DIMENSION_RE.fullmatch(normalized)
     if simple_match:
         values = re.findall(r"\d+(?:[.,]\d+)?", normalized)
-        return f" × ".join(values) + f" {simple_match.group('unit').lower()}"
+        return " × ".join(values) + f" {simple_match.group('unit').lower()}"
     return normalized
 
 
@@ -268,11 +291,27 @@ class TumblrPoster:
         """
         return generate_public_tags(artwork)
 
-    def post_artwork(self, artwork: Artwork, image_paths: Optional[List[str]] = None) -> bool:
+    def post_artwork(self, artwork: Artwork, image_paths: Optional[List[str]] = None) -> PublishResult:
         """
         Sanat eserini Tumblr blogunda fotoğraf postu olarak paylaşır.
         Eğer image_paths verilirse o dosyaları, verilmezse görsel linkini kullanır.
+
+        Zorunlu son güvenlik kapısı: Yayın hakları doğrulanmamış (is_publishable=False)
+        hiçbir eser Tumblr API'sine gönderilmez. Bu kontrol, seçim katmanından bağımsız
+        olarak savunma amaçlı uygulanır (defense in depth).
+
+        Sonuç daima yapılandırılmış PublishResult'tır. Dikkat: ağ/taşıma hataları
+        (exception) sonrası isteğin Tumblr tarafında işlenip işlenmediği bilinemez;
+        bu nedenle success=False her zaman "kesin yayınlanmadı" anlamına gelmez.
         """
+        if not getattr(artwork, "is_publishable", False):
+            logger.error(
+                "tumblr_publish_blocked source=%s object_id=%s reason=rights_not_publishable",
+                getattr(artwork, "museum", "unknown"),
+                getattr(artwork, "id", "unknown"),
+            )
+            return PublishResult(success=False, error="rights_not_publishable")
+
         caption = self.format_caption(artwork)
         tags = self.generate_tags(artwork)
 
@@ -289,6 +328,10 @@ class TumblrPoster:
 
 
 
+        # BILINÇLI KARAR: create_photo bu paylaşılan HTTP retry politikasına
+        # bağlanmaz. Tumblr oluşturma isteği idempotent değildir; şeffaf retry,
+        # isteğin ilk denemede işlendiği senaryoda double-post üretir. Belirsiz
+        # sonuçlar publication_state journal'ındaki 'uncertain' yoluyla modellenir.
         try:
             kwargs = {
                 "state": "published",
@@ -304,16 +347,17 @@ class TumblrPoster:
                 response = self.client.create_photo(self.blog_name, source=artwork.image_url, **kwargs)
 
             if isinstance(response, dict) and "id" in response:
-                post_id = response["id"]
+                post_id = str(response["id"])
                 logger.info("tumblr_publish_success source=%s object_id=%s post_id=%s", artwork.museum, artwork.id, post_id)
                 logger.info(f"✓ Tumblr paylaşımı BAŞARILI! Post ID: {post_id}")
-                return True
-            elif isinstance(response, dict) and "meta" in response:
+                return PublishResult(success=True, post_id=post_id)
+            elif isinstance(response, dict) and isinstance(response.get("meta"), dict):
                 status = response["meta"].get("status")
                 msg = response["meta"].get("msg")
                 logger.error("tumblr_publish_failure source=%s object_id=%s status=%s", artwork.museum, artwork.id, status)
                 logger.error(f"Tumblr API Hatası: [{status}] {msg}")
-                return False
+                status_code = status if isinstance(status, int) else None
+                return PublishResult(success=False, status_code=status_code, error=_sanitize_error(msg))
             else:
                 logger.error("tumblr_publish_failure source=%s object_id=%s reason=unexpected_response", artwork.museum, artwork.id)
                 response_keys = sorted(response.keys()) if isinstance(response, dict) else []
@@ -322,9 +366,10 @@ class TumblrPoster:
                     type(response).__name__,
                     response_keys,
                 )
-                return False
+                return PublishResult(success=False, error="unexpected_response")
 
         except Exception as e:
             logger.error("tumblr_publish_failure source=%s object_id=%s reason=exception", artwork.museum, artwork.id)
             logger.error("Tumblr paylaşımı sırasında beklenmedik hata oluştu: type=%s", type(e).__name__)
-            return False
+            # Sonuç belirsiz: istek Tumblr'a ulaşmış ve işlenmiş olabilir.
+            return PublishResult(success=False, error=f"exception:{type(e).__name__}")

@@ -22,16 +22,24 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Re-run / stale checkout koruması: bot çalışmadan ÖNCE main üzerindeki en
+      # güncel state (publication_state.json + posted_ids.json) çekilir. Aksi halde
+      # "Re-run failed jobs" orijinal SHA'ya karşı çalışır ve önceki çalışmanın
+      # commit'lediği rezervasyon/published kayıtlarını görmez (double-post riski).
+      - name: State'i Tazele (checkout sonrası pull --rebase)
+        run: |
+          git pull --rebase origin main
+
       - name: Python 3.11 Kurulumu
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
+          cache-dependency-path: requirements.lock
 
-      - name: Bağımlılıkları Yükle
+      - name: Bağımlılıkları Yükle (kilitlenmiş çalışma zamanı grafiği)
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install -r requirements.lock
 
       - name: Kürasyon Botunu Çalıştır
         env:
@@ -54,20 +62,32 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: State Güncelle (posted_ids.json Commit & Push)
+      - name: State Güncelle (publication state Commit & Push)
+        if: always() # Rezervasyon kaydedilmiş ama yayın yarıda kalmışsa bile state commit'lensin
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          if [ -n "$(git status --porcelain posted_ids.json)" ]; then
-            git add posted_ids.json
-            git commit -m "Auto: Update posted_ids.json [skip ci]"
+          state_files="posted_ids.json publication_state.json"
+
+          if [ -n "$(git status --porcelain -- $state_files)" ]; then
+            # Yalnızca state dosyaları stage'lenir; .env / telemetry / .mimosa / geçici
+            # dosyalar asla commit'e dahil edilmez.
+            git add $state_files
+            git commit -m "Auto: Update publication state [skip ci]"
 
             max_attempts=3
             for attempt in $(seq 1 "$max_attempts"); do
               if git pull --rebase origin main && git push origin HEAD:main; then
-                echo "posted_ids.json başarıyla repoya güncellendi."
+                echo "publication state başarıyla repoya güncellendi."
                 exit 0
+              fi
+
+              # Rebase çakışması yarım bırakılırsa sonraki denemeler de kaçınlıyla
+              # başarısız olur ("rebase in progress"); denemeler arası temizlik şart.
+              if [ -d "$(git rev-parse --git-path rebase-merge 2>/dev/null)" ] || \
+                 [ -d "$(git rev-parse --git-path rebase-apply 2>/dev/null)" ]; then
+                git rebase --abort || true
               fi
 
               if [ "$attempt" -lt "$max_attempts" ]; then
@@ -77,8 +97,8 @@ jobs:
               fi
             done
 
-            echo "posted_ids.json $max_attempts denemede repoya gönderilemedi."
+            echo "publication state $max_attempts denemede repoya gönderilemedi."
             exit 1
           else
-            echo "posted_ids.json dosyasında değişiklik yok."
+            echo "State dosyalarında (posted_ids.json, publication_state.json) değişiklik yok."
           fi

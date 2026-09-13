@@ -1,0 +1,13 @@
+#
+# Geliştirme/CI bağımlılıkları (insan tarafından düzenlenir).
+# Bu dosya yetkili kaynaktır; requirements-dev.lock bu dosyadan üretilir:
+#   pip-compile requirements-dev.in --output-file requirements-dev.lock
+#
+
+-r requirements.in
+
+# Statik analiz (CI quality gate)
+ruff>=0.14.13,<0.15
+
+# Kilit üretim aracı (yeniden kilitleme için; CI/çalışma zamanı kullanmaz)
+pip-tools>=7.4,<8
