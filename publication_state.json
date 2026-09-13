@@ -1,4 +1,19 @@
 {
-  "schema_version": 1,
-  "records": {}
+  "records": {
+    "cma:101365": {
+      "artist_key": "",
+      "artist_name": "Unknown Artist",
+      "artwork_id": "101365",
+      "error": "",
+      "medium_type": "Sculpture",
+      "museum": "cma",
+      "published_at": "2026-09-13T22:18:39.134857+00:00",
+      "reserved_at": "2026-09-13T22:18:38.478202+00:00",
+      "score": 80,
+      "status": "published",
+      "title": "Naophorous Statue of the Finance Officer and Overseer of Fields, Horwedja",
+      "tumblr_post_id": "827680797622419456"
+    }
+  },
+  "schema_version": 1
 }
