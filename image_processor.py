@@ -9,6 +9,7 @@ from http_requests import (
     IMAGE_REQUEST_HEADERS,
     RETRYABLE_HTTP_STATUS_CODES,
     request_with_bounded_retry,
+    safe_url_for_logging,
 )
 
 logger = logging.getLogger("artfolio_bot.image_processor")
@@ -21,7 +22,11 @@ SUPPORTED_IMAGE_MIME_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"}
 DOWNLOAD_CHUNK_SIZE = 64 * 1024
 AIC_IIIF_LARGE_SIZE_SUFFIX = "/full/1686,/0/default.jpg"
 AIC_IIIF_STANDARD_SIZE_SUFFIX = "/full/843,/0/default.jpg"
-AIC_IIIF_RETRYABLE_STATUS_CODES = RETRYABLE_HTTP_STATUS_CODES - {403}
+# CDN'ler görsel 403'lerini çoğunlukla geçici (hotlink/throttle) döndürür; 403 yalnızca
+# görsel indirmeleri için explicit olarak eklenir (paylaşılan varsayılan küme 403 içermez).
+IMAGE_RETRYABLE_STATUS_CODES = RETRYABLE_HTTP_STATUS_CODES | {403}
+# AIC IIIF 403 ise status-retry YOK: tek seferlik standart-boyut (843) fallback'e geçilir.
+AIC_IIIF_RETRYABLE_STATUS_CODES = RETRYABLE_HTTP_STATUS_CODES
 
 
 def _aic_iiif_fallback_url(url: str) -> str:
@@ -35,9 +40,9 @@ def download_image(url: str, *, aic_iiif: bool = False) -> str:
     path = None
     response = None
     try:
-        logger.info("image_download_start url=%s", url)
+        logger.info("image_download_start url=%s", safe_url_for_logging(url))
         retryable_status_codes = (
-            AIC_IIIF_RETRYABLE_STATUS_CODES if aic_iiif else RETRYABLE_HTTP_STATUS_CODES
+            AIC_IIIF_RETRYABLE_STATUS_CODES if aic_iiif else IMAGE_RETRYABLE_STATUS_CODES
         )
 
         def request_image(image_url):
@@ -58,7 +63,11 @@ def download_image(url: str, *, aic_iiif: bool = False) -> str:
         fallback_url = _aic_iiif_fallback_url(url) if aic_iiif else ""
         if response.status_code == 403 and fallback_url:
             response.close()
-            logger.info("aic_iiif_fallback primary=%s fallback=%s", url, fallback_url)
+            logger.info(
+                "aic_iiif_fallback primary=%s fallback=%s",
+                safe_url_for_logging(url),
+                safe_url_for_logging(fallback_url),
+            )
             response = request_image(fallback_url)
             downloaded_url = fallback_url
 
@@ -104,7 +113,7 @@ def download_image(url: str, *, aic_iiif: bool = False) -> str:
 
         logger.info(
             "image_download_success url=%s mime=%s bytes=%d dimensions=%dx%d",
-            downloaded_url,
+            safe_url_for_logging(downloaded_url),
             content_type,
             os.path.getsize(path),
             width,
@@ -116,10 +125,9 @@ def download_image(url: str, *, aic_iiif: bool = False) -> str:
         return result
     except Exception as e:
         logger.error(
-            "image_download_failure url=%s reason=%s detail=%s",
-            url,
+            "image_download_failure url=%s reason=%s",
+            safe_url_for_logging(url),
             type(e).__name__,
-            e,
         )
         return None
     finally:
@@ -127,7 +135,10 @@ def download_image(url: str, *, aic_iiif: bool = False) -> str:
             try:
                 response.close()
             except Exception as close_error:
-                logger.warning(f"Görsel response'u kapatılamadı: {close_error}")
+                logger.warning(
+                    "image_response_close_failure reason=%s",
+                    type(close_error).__name__,
+                )
         if path:
             try:
                 os.unlink(path)
@@ -220,9 +231,7 @@ def create_grid(image_paths: list) -> str:
         
     try:
         images = [Image.open(p) for p in image_paths[:4]]
-        # En küçük boyuta göre kare kırp
-        min_dim = min(min(img.size) for img in images)
-        
+
         processed_images = []
         for img in images:
             # Merkezden kare olarak kırp ve yeniden boyutlandır

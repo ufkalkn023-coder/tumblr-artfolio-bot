@@ -1,0 +1,60 @@
+name: CI Quality Gate
+
+# Kalite kapısı: push / PR (main) ve manuel tetikleme.
+# Bu workflow ASLA Tumblr kimlik bilgisi almaz ve ASLA yayın yapmaz;
+# yalnızca sözdizimi + lint + birim testleri çalıştırır.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+# En az yetki ilkesi: yalnızca kaynak kodu okuma yetkisi.
+permissions:
+  contents: read
+
+# Aynı branch/PR'daki eski çalıştırmaları iptal et (yalnızca CI için;
+# üretim Tumblr workflow'unda cancel-in-progress ASLA kullanılmaz).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Depoyu Klonla
+        uses: actions/checkout@v4
+
+      - name: Python 3.11 Kurulumu
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements-dev.lock
+
+      - name: Bağımlılıkları Yükle (kilitlenmiş dev grafiği)
+        run: |
+          python -m pip install -r requirements-dev.lock
+
+      - name: Sözdizimi Kontrolü (compileall)
+        run: python -m compileall -q .
+
+      - name: Statik Analiz (ruff)
+        run: ruff check .
+
+      - name: Birim Testleri
+        run: python -m unittest discover -v
+
+      - name: State Dosyası Bütünlüğü (testler üretim state'ini değiştirmemeli)
+        run: |
+          if [ -n "$(git status --porcelain -- posted_ids.json publication_state.json)" ]; then
+            echo "HATA: test çalışması izlenen state dosyalarını değiştirdi!"
+            git status --short
+            exit 1
+          fi
+          echo "State dosyaları değişmedi."

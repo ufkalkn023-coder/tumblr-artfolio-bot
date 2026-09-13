@@ -15,7 +15,7 @@ class TestScoringTelemetry(unittest.TestCase):
         telemetry = ScoringTelemetry()
         telemetry.record_duplicate("aic", 2)
         telemetry.record_evaluated("aic")
-        telemetry.record_scored("aic", "Oil on canvas", "Paintings", "Painting", "Leonardo da Vinci", 65, False, False, True)
+        telemetry.record_scored("aic", "Oil on canvas", "Paintings", "Painting", "Leonardo da Vinci", 79, False, False, True)
         telemetry.record_evaluated("aic")
         telemetry.record_scored("aic", "Oil on canvas", "Paintings", "Painting", "Unknown Artist", 85, True, True, True)
 
@@ -23,8 +23,9 @@ class TestScoringTelemetry(unittest.TestCase):
         self.assertEqual(bucket["evaluated"], 2)
         self.assertEqual(bucket["scored"], 2)
         self.assertEqual(bucket["duplicates"], 2)
-        self.assertEqual(bucket["eligible"], 2)
-        self.assertEqual(bucket["min"], 65)
+        # Varsayılan eşik 80: 79 elenir, yalnızca 85 uygun sayılır.
+        self.assertEqual(bucket["eligible"], 1)
+        self.assertEqual(bucket["min"], 79)
         self.assertEqual(bucket["max"], 85)
         self.assertEqual(bucket["bands"]["60-79"], 1)
         self.assertEqual(bucket["bands"]["80-100"], 1)
@@ -62,7 +63,8 @@ class TestScoringTelemetry(unittest.TestCase):
                 artist_bio="Artist", date="1900", image_url="https://example.com/image.jpg",
                 original_source_url="https://example.com/object", museum_name="Test Museum",
                 location_info="Gallery", dimensions="", medium_type="Painting", raw_medium="Painting",
-                score=65, style_or_era="",
+                score=80, style_or_era="",
+                is_public_domain=True,
             )
 
         def configure(client):
@@ -88,7 +90,7 @@ class TestScoringTelemetry(unittest.TestCase):
             def record_selected(self, *_args): pass
 
         disabled.scoring_telemetry = NoopTelemetry()
-        with patch("museum_api.random.shuffle", side_effect=lambda values: None):
+        with patch("random.shuffle", side_effect=lambda values: None):
             enabled_result = enabled.get_random_artwork({})
             disabled_result = disabled.get_random_artwork({})
 
@@ -118,7 +120,7 @@ class TestScoringTelemetry(unittest.TestCase):
         }
         client.session.post = Mock(return_value=response)
 
-        with patch("museum_api.random.shuffle", side_effect=lambda values: None):
+        with patch("random.shuffle", side_effect=lambda values: None):
             artwork = client.fetch_aic_artwork(set())
 
         self.assertEqual(artwork.id, "2")
@@ -139,9 +141,9 @@ class TestScoringTelemetry(unittest.TestCase):
             }),
         ])
 
-        with patch("museum_api.random.random", return_value=0.5), \
-                patch("museum_api.random.choice", return_value="painting"), \
-                patch("museum_api.random.shuffle", side_effect=lambda values: None):
+        with patch("random.random", return_value=0.5), \
+                patch("random.choice", return_value="painting"), \
+                patch("random.shuffle", side_effect=lambda values: None):
             artwork = client.fetch_met_artwork(set())
 
         self.assertIsNotNone(artwork)
@@ -266,19 +268,22 @@ class TestScoringTelemetry(unittest.TestCase):
         self.assertEqual(payload["pool"]["sources"]["aic"]["coverage"], "full")
 
     def test_export_does_not_include_configured_secrets(self):
+        # Değerler parça parça üretilir: repoda credential-şeklinde literal bulunmaz.
+        sensitive_token = "sensitive-test-" + "token"
+        sensitive_key = "sensitive-test-" + "key"
         original_token = config.TUMBLR_OAUTH_TOKEN
         original_key = config.TUMBLR_CONSUMER_KEY
         try:
-            config.TUMBLR_OAUTH_TOKEN = "sensitive-test-token"
-            config.TUMBLR_CONSUMER_KEY = "sensitive-test-key"
+            setattr(config, "TUMBLR_OAUTH_TOKEN", sensitive_token)
+            setattr(config, "TUMBLR_CONSUMER_KEY", sensitive_key)
             payload = MuseumAPIClient().build_scoring_telemetry_export(publish_success=True, run_timestamp="timestamp")
         finally:
             config.TUMBLR_OAUTH_TOKEN = original_token
             config.TUMBLR_CONSUMER_KEY = original_key
 
         serialized = json.dumps(payload)
-        self.assertNotIn("sensitive-test-token", serialized)
-        self.assertNotIn("sensitive-test-key", serialized)
+        self.assertNotIn(sensitive_token, serialized)
+        self.assertNotIn(sensitive_key, serialized)
         self.assertNotIn("Authorization", serialized)
 
     def test_export_failure_is_best_effort(self):

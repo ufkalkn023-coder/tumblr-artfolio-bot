@@ -12,11 +12,22 @@ ENV/
 .venv/
 
 # Çevre Değişkenleri ve Gizli Anahtarlar
+# NOT: .env.example bilinçli olarak izlenir (şablon); yalnızca gerçek .env* hariç tutulur.
 .env
-.env.local
+.env.*
+!.env.example
+
+# Araç önbellekleri / üretilen içerik
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+output/
 
 # IDE & OS
 .vscode/
 .idea/
 .DS_Store
 *.log
+
+# Yerel güvenlik tarama aracı state'i (asla commit edilmemeli)
+.mimosa/

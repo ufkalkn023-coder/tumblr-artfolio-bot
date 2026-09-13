@@ -1,5 +1,5 @@
 """
-test_bot.py - 85/100 Kalite Puanlama Sistemi, Müze API'leri ve Formatlama Testleri
+test_bot.py - 80/100 Kalite Puanlama Sistemi, Müze API'leri ve Formatlama Testleri
 """
 
 import unittest
@@ -10,7 +10,6 @@ import requests
 from museum_api import (
     Artwork,
     ArtworkScorer,
-    MINIMUM_QUALITY_SCORE,
     MuseumAPIClient,
     build_aic_iiif_image_url,
 )
@@ -24,6 +23,7 @@ from tumblr_poster import (
     normalize_medium_display,
 )
 import config
+from _mock_tumblr_credentials import apply_mock_tumblr_credentials
 from http_requests import JSON_REQUEST_HEADERS, MAX_TRANSIENT_HTTP_ATTEMPTS
 
 
@@ -40,15 +40,11 @@ class TestTumblrBot(unittest.TestCase):
 
     def setUp(self):
         self.museum_client = MuseumAPIClient()
-        config.TUMBLR_CONSUMER_KEY = "mock_key"
-        config.TUMBLR_CONSUMER_SECRET = "mock_secret"
-        config.TUMBLR_OAUTH_TOKEN = "mock_token"
-        config.TUMBLR_OAUTH_SECRET = "mock_token_secret"
-        config.TUMBLR_BLOG_NAME = "artfolio-db.tumblr.com"
+        apply_mock_tumblr_credentials(config)
 
     def test_scoring_system_rules(self):
-        """Puanlama sisteminin 85/100 eşiğini doğru uyguladığını test eder."""
-        # 1. Başyapıt Resim (Mona Lisa - Da Vinci): 85+ almalı
+        """Puanlama sisteminin 80/100 üretim eşiğini doğru uyguladığını test eder."""
+        # 1. Başyapıt Resim (Mona Lisa - Da Vinci): 80+ almalı
         score_master, reason_master = ArtworkScorer.calculate_score(
             title="Mona Lisa",
             artist="Leonardo da Vinci",
@@ -62,9 +58,9 @@ class TestTumblrBot(unittest.TestCase):
             on_view=True
         )
         print(f"\n[Test Master Painting] {reason_master}")
-        self.assertGreaterEqual(score_master, MINIMUM_QUALITY_SCORE)
+        self.assertGreaterEqual(score_master, 80)
 
-        # 2. Ünlü Mermer Heykel (Michelangelo David veya Rodin): 85+ almalı
+        # 2. Ünlü Mermer Heykel (Michelangelo David veya Rodin): 80+ almalı
         score_sculpture, reason_sculpture = ArtworkScorer.calculate_score(
             title="The Thinker",
             artist="Auguste Rodin",
@@ -78,9 +74,9 @@ class TestTumblrBot(unittest.TestCase):
             on_view=True
         )
         print(f"[Test Master Sculpture] {reason_sculpture}")
-        self.assertGreaterEqual(score_sculpture, MINIMUM_QUALITY_SCORE)
+        self.assertGreaterEqual(score_sculpture, 80)
 
-        # 3. Düşük Kalite / Fragman / Önemsiz Parça: 85'in altında kalmalı ve elenmeli
+        # 3. Düşük Kalite / Fragman / Önemsiz Parça: 80'in altında kalmalı ve elenmeli
         score_fragment, reason_fragment = ArtworkScorer.calculate_score(
             title="Fragment of a jar rim",
             artist="Unknown Artist",
@@ -94,7 +90,7 @@ class TestTumblrBot(unittest.TestCase):
             on_view=False
         )
         print(f"[Test Low Quality Fragment] {reason_fragment}")
-        self.assertLess(score_fragment, MINIMUM_QUALITY_SCORE)
+        self.assertLess(score_fragment, 80)
 
     def test_met_api_fetch_with_score(self):
         """The Met fixture'ından geçerli ve yeterli puanlı eser seçilir."""
@@ -120,7 +116,7 @@ class TestTumblrBot(unittest.TestCase):
 
         self.assertIsNotNone(artwork)
         self.assertEqual(artwork.museum, "met")
-        self.assertGreaterEqual(artwork.score, MINIMUM_QUALITY_SCORE)
+        self.assertGreaterEqual(artwork.score, 80)
         self.assertTrue(artwork.image_url.startswith("http"))
 
     def test_aic_api_fetch_with_score(self):
@@ -147,7 +143,7 @@ class TestTumblrBot(unittest.TestCase):
 
         self.assertIsNotNone(artwork)
         self.assertEqual(artwork.museum, "aic")
-        self.assertGreaterEqual(artwork.score, MINIMUM_QUALITY_SCORE)
+        self.assertGreaterEqual(artwork.score, 80)
         self.assertEqual(
             artwork.image_url,
             "https://images.example/iiif/2/test-image/full/1686,/0/default.jpg",
@@ -188,7 +184,7 @@ class TestTumblrBot(unittest.TestCase):
         self.museum_client.session.post = Mock(side_effect=[blocked, success])
 
         with patch("http_requests.time.sleep") as sleep, \
-                patch("museum_api.random.shuffle", side_effect=lambda values: None):
+                patch("random.shuffle", side_effect=lambda values: None):
             artwork = self.museum_client.fetch_aic_artwork(set())
 
         self.assertIsNotNone(artwork)
@@ -226,7 +222,8 @@ class TestTumblrBot(unittest.TestCase):
             artist_bio="Artist", date="1900", image_url="https://example.com/image.jpg",
             original_source_url="https://example.com/artwork", museum_name="Harvard",
             location_info="Gallery", dimensions="", medium_type="Painting",
-            raw_medium="Oil on canvas", score=MINIMUM_QUALITY_SCORE,
+            raw_medium="Oil on canvas", score=80,
+            is_public_domain=True,
         )
         self.museum_client.fetch_met_artwork = make_fetcher("met")
         self.museum_client.fetch_aic_artwork = Mock()
@@ -234,9 +231,9 @@ class TestTumblrBot(unittest.TestCase):
         self.museum_client.fetch_smk_artwork = make_fetcher("smk")
         self.museum_client.fetch_harvard_artwork = make_fetcher("harvard", harvard_artwork)
 
-        with patch("museum_api.AIC_PUBLISHING_ENABLED", False), \
-                patch("museum_api.random.shuffle", side_effect=lambda values: None), \
-                patch("museum_api.logger") as mock_logger:
+        with patch("artfolio.sources.aic.AIC_PUBLISHING_ENABLED", False), \
+                patch("random.shuffle", side_effect=lambda values: None), \
+                patch("artfolio.curation.museum_client.logger") as mock_logger:
             artwork = self.museum_client.get_random_artwork({"aic": ["already-posted"]})
             repeated_artwork = self.museum_client.get_random_artwork({"aic": ["already-posted"]})
 
@@ -271,7 +268,8 @@ class TestTumblrBot(unittest.TestCase):
             artist_bio="Artist", date="1900", image_url="https://example.com/image.jpg",
             original_source_url="https://example.com/artwork", museum_name="AIC",
             location_info="Gallery", dimensions="", medium_type="Painting",
-            raw_medium="Oil on canvas", score=MINIMUM_QUALITY_SCORE,
+            raw_medium="Oil on canvas", score=80,
+            is_public_domain=True,
         )
         self.museum_client.fetch_met_artwork = make_fetcher("met")
         self.museum_client.fetch_aic_artwork = make_fetcher("aic", aic_artwork)
@@ -279,8 +277,8 @@ class TestTumblrBot(unittest.TestCase):
         self.museum_client.fetch_smk_artwork = Mock()
         self.museum_client.fetch_harvard_artwork = Mock()
 
-        with patch("museum_api.AIC_PUBLISHING_ENABLED", True), \
-                patch("museum_api.random.shuffle", side_effect=lambda values: None):
+        with patch("artfolio.sources.aic.AIC_PUBLISHING_ENABLED", True), \
+                patch("random.shuffle", side_effect=lambda values: None):
             artwork = self.museum_client.get_random_artwork({})
 
         self.assertEqual(artwork.id, "aic-1")
@@ -310,16 +308,18 @@ class TestTumblrBot(unittest.TestCase):
 
         self.assertIsNotNone(artwork)
         self.assertEqual(artwork.museum, "cma")
-        self.assertGreaterEqual(artwork.score, MINIMUM_QUALITY_SCORE)
+        self.assertGreaterEqual(artwork.score, 80)
         self.assertTrue(artwork.image_url.startswith("http"))
 
     def test_api_network_error_is_not_success(self):
-        """Ağ hatası, sessizce başarılı kabul edilmemelidir."""
+        """Ağ hatası, sessizce başarılı kabul edilmemelidir (retry tükenince de None)."""
         self.museum_client.session.get = Mock(side_effect=requests.ConnectionError("offline"))
 
-        artwork = self.museum_client.fetch_met_artwork(posted_ids=set())
+        with patch("http_requests.time.sleep"):
+            artwork = self.museum_client.fetch_met_artwork(posted_ids=set())
 
         self.assertIsNone(artwork)
+        self.assertEqual(self.museum_client.session.get.call_count, MAX_TRANSIENT_HTTP_ATTEMPTS)
 
     def test_api_invalid_response_is_not_success(self):
         """Geçersiz API cevabı, sessizce başarılı kabul edilmemelidir."""
@@ -418,9 +418,10 @@ class TestTumblrBot(unittest.TestCase):
             artist_bio="Christoffersen, Frede", date="1900", image_url="https://example.com/image.jpg",
             original_source_url="https://museum.example/art/4", museum_name="The Met", location_info="Gallery",
             dimensions="31 centimeter", medium_type="Painting", raw_medium="Oil on canvas", score=90,
+            is_public_domain=True,
         )
 
-        self.assertTrue(poster.post_artwork(artwork))
+        self.assertTrue(poster.post_artwork(artwork).success)
         kwargs = poster.client.create_photo.call_args.kwargs
         self.assertEqual(kwargs["link"], "https://museum.example/art/4")
         self.assertIn('/tagged/my:christoffersenfrede', kwargs["caption"])
