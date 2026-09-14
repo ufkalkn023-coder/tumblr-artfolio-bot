@@ -41,6 +41,20 @@
       "status": "published",
       "title": "Holiday on the Hudson",
       "tumblr_post_id": "827709932673630208"
+    },
+    "met:459084": {
+      "artist_key": "gerard ter borch the younger",
+      "artist_name": "Gerard ter Borch the Younger",
+      "artwork_id": "459084",
+      "error": "",
+      "medium_type": "Painting",
+      "museum": "met",
+      "published_at": "2026-09-14T13:51:12.754697+00:00",
+      "reserved_at": "2026-09-14T13:51:10.784858+00:00",
+      "score": 85,
+      "status": "published",
+      "title": "Margaretha van Haexbergen (1614–1676)",
+      "tumblr_post_id": "827739469198344192"
     }
   },
   "schema_version": 1
