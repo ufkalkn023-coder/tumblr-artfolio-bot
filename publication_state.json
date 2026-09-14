@@ -27,6 +27,20 @@
       "status": "published",
       "title": "Cupids in Conspiracy",
       "tumblr_post_id": "827690584015814656"
+    },
+    "cma:172828": {
+      "artist_key": "george luks",
+      "artist_name": "George Luks",
+      "artwork_id": "172828",
+      "error": "",
+      "medium_type": "Painting",
+      "museum": "cma",
+      "published_at": "2026-09-14T06:01:45.023399+00:00",
+      "reserved_at": "2026-09-14T06:01:43.429455+00:00",
+      "score": 90,
+      "status": "published",
+      "title": "Holiday on the Hudson",
+      "tumblr_post_id": "827709932673630208"
     }
   },
   "schema_version": 1
