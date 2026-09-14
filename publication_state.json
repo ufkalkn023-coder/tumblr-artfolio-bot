@@ -13,6 +13,20 @@
       "status": "published",
       "title": "Naophorous Statue of the Finance Officer and Overseer of Fields, Horwedja",
       "tumblr_post_id": "827680797622419456"
+    },
+    "cma:125950": {
+      "artist_key": "françois boucher",
+      "artist_name": "François Boucher",
+      "artwork_id": "125950",
+      "error": "",
+      "medium_type": "Painting",
+      "museum": "cma",
+      "published_at": "2026-09-14T00:54:12.160148+00:00",
+      "reserved_at": "2026-09-14T00:54:11.086907+00:00",
+      "score": 90,
+      "status": "published",
+      "title": "Cupids in Conspiracy",
+      "tumblr_post_id": "827690584015814656"
     }
   },
   "schema_version": 1
