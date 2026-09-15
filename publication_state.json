@@ -139,6 +139,20 @@
       "status": "published",
       "title": "Marble Portrait Bust of a Woman with a Scroll",
       "tumblr_post_id": "827815379809255424"
+    },
+    "met:854908": {
+      "artist_key": "",
+      "artist_name": "Unknown Artist",
+      "artwork_id": "854908",
+      "error": "",
+      "medium_type": "Painting",
+      "museum": "met",
+      "published_at": "2026-09-15T22:04:18.435909+00:00",
+      "reserved_at": "2026-09-15T22:04:15.696471+00:00",
+      "score": 80,
+      "status": "published",
+      "title": "Vaishravana, the Guardian of Buddhism and Protector of Riches",
+      "tumblr_post_id": "827861088986136576"
     }
   },
   "schema_version": 1
