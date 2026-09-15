@@ -97,6 +97,20 @@
       "status": "published",
       "title": "Margaretha van Haexbergen (1614–1676)",
       "tumblr_post_id": "827739469198344192"
+    },
+    "met:468716": {
+      "artist_key": "",
+      "artist_name": "Unknown Artist",
+      "artwork_id": "468716",
+      "error": "",
+      "medium_type": "Sculpture",
+      "museum": "met",
+      "published_at": "2026-09-15T09:57:46.734488+00:00",
+      "reserved_at": "2026-09-15T09:57:45.726672+00:00",
+      "score": 80,
+      "status": "published",
+      "title": "Marble Portrait Bust of a Woman with a Scroll",
+      "tumblr_post_id": "827815379809255424"
     }
   },
   "schema_version": 1
