@@ -126,6 +126,20 @@
       "title": "Adoration of the Magi",
       "tumblr_post_id": "827774238460198912"
     },
+    "cma:144588": {
+      "artist_key": "francisco de goya",
+      "artist_name": "Francisco de Goya",
+      "artwork_id": "144588",
+      "error": "",
+      "medium_type": "Painting",
+      "museum": "cma",
+      "published_at": "2026-09-19T20:28:21.442122+00:00",
+      "reserved_at": "2026-09-19T20:28:20.789901+00:00",
+      "score": 100,
+      "status": "published",
+      "title": "Saint Ambrose",
+      "tumblr_post_id": "828217440242696192"
+    },
     "cma:146000": {
       "artist_key": "",
       "artist_name": "Unknown Artist",
