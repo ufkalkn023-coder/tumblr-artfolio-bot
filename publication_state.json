@@ -84,6 +84,20 @@
       "title": "Spring",
       "tumblr_post_id": "828204878386036736"
     },
+    "cma:129802": {
+      "artist_key": "francesco guardi",
+      "artist_name": "Francesco Guardi",
+      "artwork_id": "129802",
+      "error": "",
+      "medium_type": "Painting",
+      "museum": "cma",
+      "published_at": "2026-09-20T00:56:57.721014+00:00",
+      "reserved_at": "2026-09-20T00:56:56.747177+00:00",
+      "score": 90,
+      "status": "published",
+      "title": "The Sacrifice of Isaac",
+      "tumblr_post_id": "828234339444801536"
+    },
     "cma:135183": {
       "artist_key": "",
       "artist_name": "Unknown Artist",
