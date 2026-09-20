@@ -294,6 +294,20 @@
       "title": "A Musical Company",
       "tumblr_post_id": "828098255664644096"
     },
+    "cma:159488": {
+      "artist_key": "hendrik van balen",
+      "artist_name": "Hendrik van Balen",
+      "artwork_id": "159488",
+      "error": "",
+      "medium_type": "Painting",
+      "museum": "cma",
+      "published_at": "2026-09-20T12:12:04.257653+00:00",
+      "reserved_at": "2026-09-20T12:12:03.441243+00:00",
+      "score": 90,
+      "status": "published",
+      "title": "The Trinity",
+      "tumblr_post_id": "828276813590577152"
+    },
     "cma:172828": {
       "artist_key": "george luks",
       "artist_name": "George Luks",
