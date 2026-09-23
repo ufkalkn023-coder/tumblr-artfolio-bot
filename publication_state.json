@@ -546,6 +546,20 @@
       "title": "Portrait of a Carthusian",
       "tumblr_post_id": "828009263397060608"
     },
+    "met:436095": {
+      "artist_key": "honoré daumier",
+      "artist_name": "Honoré Daumier",
+      "artwork_id": "436095",
+      "error": "",
+      "medium_type": "Painting",
+      "museum": "met",
+      "published_at": "2026-09-23T23:34:00.030834+00:00",
+      "reserved_at": "2026-09-23T23:33:58.981667+00:00",
+      "score": 80,
+      "status": "published",
+      "title": "The Third-Class Carriage",
+      "tumblr_post_id": "828591507593396224"
+    },
     "met:436106": {
       "artist_key": "jacques louis david",
       "artist_name": "Jacques Louis David",
