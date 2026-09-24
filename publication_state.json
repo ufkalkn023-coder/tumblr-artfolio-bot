@@ -741,6 +741,20 @@
       "status": "published",
       "title": "Vaishravana, the Guardian of Buddhism and Protector of Riches",
       "tumblr_post_id": "827861088986136576"
+    },
+    "met:921065": {
+      "artist_key": "josé campeche",
+      "artist_name": "José Campeche",
+      "artwork_id": "921065",
+      "error": "",
+      "medium_type": "Painting",
+      "museum": "met",
+      "published_at": "2026-09-24T22:17:30.682864+00:00",
+      "reserved_at": "2026-09-24T22:17:26.237190+00:00",
+      "score": 85,
+      "status": "published",
+      "title": "Portrait of Nicolás Matías Fernández Méndez",
+      "tumblr_post_id": "828677292476760064"
     }
   },
   "schema_version": 1
