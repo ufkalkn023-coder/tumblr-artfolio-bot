@@ -16,6 +16,7 @@ from artfolio.curation.diversity import (
     ARTIST_COOLDOWN,
     MEDIUM_CONSECUTIVE_LIMIT,
     SOURCE_CONSECUTIVE_LIMIT,
+    SOURCE_LIMIT_RELAXED,
     FeedDiversityPolicy,
     normalize_artist_name,
 )
@@ -365,7 +366,7 @@ class TestSelectionIntegration(unittest.TestCase):
         policy.rejection_reason.assert_not_called()
         self.assertEqual(client.last_run_stats["rejected_diversity"], 0)
 
-    def test_diversity_rejection_never_increments_source_failures(self):
+    def test_source_lock_never_increments_source_failures(self):
         history = [published(index, museum="met", artist=f"Artist {index}") for index in (3, 2, 1)]
         client = MuseumAPIClient(recent_published=history)
         calls = []
@@ -374,12 +375,15 @@ class TestSelectionIntegration(unittest.TestCase):
 
         with patch("artfolio.sources.aic.AIC_PUBLISHING_ENABLED", False), \
                 patch("random.shuffle", side_effect=lambda values: None):
-            self.assertIsNone(client.get_random_artwork({}))
+            result = client.get_random_artwork({})
 
         client.health.record_failure.assert_not_called()
         self.assertEqual(client.last_run_stats[SOURCE_CONSECUTIVE_LIMIT], 1)
+        # Kilit tek engeldi: döngü ölmez, aday kullanıcı adayı olarak döner.
+        self.assertEqual(result.id, "blocked")
+        self.assertEqual(client.last_run_stats[SOURCE_LIMIT_RELAXED], 1)
 
-    def test_healthy_fetch_rejected_by_diversity_remains_source_success(self):
+    def test_healthy_fetch_blocked_by_diversity_remains_source_success(self):
         history = [published(index, museum="met", artist=f"Artist {index}") for index in (3, 2, 1)]
         client = MuseumAPIClient(recent_published=history)
         met = client._sources["met"]
@@ -399,13 +403,77 @@ class TestSelectionIntegration(unittest.TestCase):
 
         with patch("artfolio.sources.aic.AIC_PUBLISHING_ENABLED", False), \
                 patch("random.shuffle", side_effect=lambda values: None):
-            self.assertIsNone(client.get_random_artwork({}))
+            result = client.get_random_artwork({})
 
         health = client.get_source_health()["met"]
         self.assertEqual(health["total_successes"], 1)
         self.assertEqual(health["total_failures"], 0)
         self.assertEqual(health["state"], "closed")
         self.assertEqual(client.last_run_stats["circuit_skips"], 0)
+        self.assertEqual(result.id, "blocked")
+
+    def test_relaxation_prefers_the_highest_scoring_locked_candidate(self):
+        # Gerçek üretim senaryosu: son 3 yayın da CMA (post=100489/101365
+        # durumu). CMA kilitli; met 80+ eşiğini geçemiyor ve hiç dönmüyor.
+        # Havuzda CMA'nın iki adayı kalır, en yüksek puan kazanır.
+        history = [
+            published(3, museum="cma", artist="Artist 3", medium_type="Sculpture"),
+            published(2, museum="cma", artist="Artist 2", medium_type="Drawing"),
+            published(1, museum="cma", artist="Artist 1", medium_type="Object"),
+        ]
+        client = MuseumAPIClient(recent_published=history)
+        self._install_fetchers(client, {
+            "met": None,  # met hiç eşiği geçemiyor -> fetch None döner
+            "cma": make_artwork("cma-high", museum="cma", artist="A", score=93, medium_type="Sculpture"),
+        }, [])
+
+        with patch("artfolio.sources.aic.AIC_PUBLISHING_ENABLED", False), \
+                patch("random.shuffle", side_effect=lambda values: None):
+            result = client.get_random_artwork({})
+
+        self.assertEqual(result.id, "cma-high")
+        self.assertEqual(client.last_run_stats[SOURCE_LIMIT_RELAXED], 1)
+        self.assertEqual(client.last_run_stats[SOURCE_CONSECUTIVE_LIMIT], 1)
+
+    def test_relaxation_does_not_fire_when_another_source_is_eligible(self):
+        # Kilit met'e karşı; cma kilitlenmez ve normal seçim yolu çalışır.
+        # Türler çeşitlendirilir ki medium kilidi de devreye girmesin.
+        history = [
+            published(3, museum="met", artist="Artist 3", medium_type="Sculpture"),
+            published(2, museum="met", artist="Artist 2", medium_type="Drawing"),
+            published(1, museum="met", artist="Artist 1", medium_type="Object"),
+        ]
+        client = MuseumAPIClient(recent_published=history)
+        self._install_fetchers(client, {
+            "met": make_artwork("met-locked", museum="met", artist="A", medium_type="Sculpture"),
+            "cma": make_artwork("cma-ok", museum="cma", artist="B", medium_type="Painting"),
+        }, [])
+
+        with patch("artfolio.sources.aic.AIC_PUBLISHING_ENABLED", False), \
+                patch("random.shuffle", side_effect=lambda values: None):
+            result = client.get_random_artwork({})
+
+        self.assertEqual(result.id, "cma-ok")
+        # Kilit gevşetilmedi: normal seçim yolu çalıştı.
+        self.assertEqual(client.last_run_stats[SOURCE_LIMIT_RELAXED], 0)
+        self.assertEqual(client.last_run_stats[SOURCE_CONSECUTIVE_LIMIT], 1)
+
+    def test_relaxation_never_rescues_a_below_threshold_candidate(self):
+        """Kilit gevşetmesi kalite eşiğinin altındaki bir adayı kurtarmaz."""
+        history = [published(index, museum="met", artist=f"Artist {index}") for index in (3, 2, 1)]
+        client = MuseumAPIClient(recent_published=history)
+        self._install_fetchers(client, {
+            "met": make_artwork("too-low", museum="met", score=79),
+        }, [])
+
+        with patch("artfolio.sources.aic.AIC_PUBLISHING_ENABLED", False), \
+                patch("random.shuffle", side_effect=lambda values: None):
+            result = client.get_random_artwork({})
+
+        self.assertIsNone(result)
+        self.assertEqual(client.last_run_stats[SOURCE_LIMIT_RELAXED], 0)
+        # Eşiğin altındaki aday asla gevşetme havuzuna girmez.
+        self.assertEqual(client.last_run_stats[SOURCE_CONSECUTIVE_LIMIT], 0)
 
     def test_empty_history_preserves_source_order_and_selection(self):
         no_op_policy = Mock()

@@ -211,6 +211,7 @@ def run_curation_cycle():
         "artist_cooldown": 0,
         "source_consecutive_limit": 0,
         "medium_consecutive_limit": 0,
+        "source_limit_relaxed": 0,
         "circuit_skips": 0,
         "eligible": 0,
     }
@@ -239,7 +240,7 @@ def run_curation_cycle():
             "candidates", "duplicates", "rejected_image", "rejected_quality",
             "rejected_rights", "rejected_diversity", "artist_cooldown",
             "source_consecutive_limit", "medium_consecutive_limit",
-            "circuit_skips", "eligible",
+            "source_limit_relaxed", "circuit_skips", "eligible",
         ):
             cycle_stats[key] += selection_stats.get(key, 0)
         logger.info(
