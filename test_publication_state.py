@@ -708,10 +708,39 @@ class TestWorkflowStatePersistence(unittest.TestCase):
         self.assertNotIn("git add output", workflow)
         self.assertNotIn("git add .mimosa", workflow)
 
-    def test_initial_state_file_is_valid_and_committed_ready(self):
+    def test_committed_state_file_is_valid_and_loadable(self):
+        """Commit'lenmiş state gerçek üretimde doludur; BOŞ olması beklenmez.
+
+        Bot her başarılı yayından sonra state'i repoya commit'ler
+        (tumblr.yml), dolayısıyla kayıtların varlığı normaldir. Buradaki
+        sözleşme "şema geçerli ve store tarafından okunabilir" olmaktır;
+        "hiç kayıt yok" değil.
+        """
+        from publication_state import SCHEMA_VERSION, PublicationStateStore
+
         payload = json.loads(Path("publication_state.json").read_text(encoding="utf-8"))
-        self.assertEqual(payload["schema_version"], 1)
-        self.assertEqual(payload["records"], {})
+        self.assertEqual(payload["schema_version"], SCHEMA_VERSION)
+        self.assertIsInstance(payload["records"], dict)
+
+        # Store bu dosyayı gerçekten yükleyebilmeli (Anahtar = museum:id).
+        for key, record in payload["records"].items():
+            with self.subTest(record=key):
+                self.assertIn(":", key)
+                source, _, artwork_id = key.partition(":")
+                self.assertTrue(source)
+                self.assertTrue(artwork_id.isdigit())
+                self.assertEqual(record["museum"], source)
+                self.assertEqual(str(record["artwork_id"]), artwork_id)
+                self.assertIsInstance(record["score"], int)
+                self.assertTrue(record["published_at"])
+
+        # Dosya okunabilir olmalı: store load sırasında hata vermemeli ve
+        # son yayınları (çeşitlilik politikasının girdisi) döndürebilmeli.
+        store = PublicationStateStore(Path("publication_state.json")).load()
+        published = store.get_recent_published()
+        self.assertGreaterEqual(len(published), len(payload["records"]))
+        # Üretim kayıtları 'published' olduğu için buraya kadar dönmelidir.
+        self.assertTrue(all(record.status == "published" for record in published))
 
 
 if __name__ == "__main__":

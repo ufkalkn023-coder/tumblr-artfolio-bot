@@ -11,6 +11,8 @@ import config
 ARTIST_COOLDOWN = "artist_cooldown"
 SOURCE_CONSECUTIVE_LIMIT = "source_consecutive_limit"
 MEDIUM_CONSECUTIVE_LIMIT = "medium_consecutive_limit"
+# Yalnızca kaynak-çeşitlilik kilidi takılıp başka aday kalmadığında devreye girer.
+SOURCE_LIMIT_RELAXED = "source_limit_relaxed"
 
 _GENERIC_ARTIST_KEYS = {
     "anonymous",

@@ -19,6 +19,7 @@ from artfolio.curation.diversity import (
     ARTIST_COOLDOWN,
     MEDIUM_CONSECUTIVE_LIMIT,
     SOURCE_CONSECUTIVE_LIMIT,
+    SOURCE_LIMIT_RELAXED,
     FeedDiversityPolicy,
 )
 from artfolio.scoring.telemetry import CandidatePoolTelemetry, ScoringTelemetry
@@ -194,7 +195,11 @@ class MuseumAPIClient:
             MEDIUM_CONSECUTIVE_LIMIT: 0,
             "circuit_skips": 0,
             "eligible": 0,
+            SOURCE_LIMIT_RELAXED: 0,
         }
+        # Kalite/hak kapılarını geçip YALNIZCA kaynak-çeşitlilik kilidine takılan
+        # adaylar. Kural bir tercihtir; tek başına kaldığında döngüyü öldürmez.
+        source_limit_blocked: List[Artwork] = []
 
         for museum_key, fetcher_func in museum_fetchers:
             # Devre kesici: OPEN kaynak cooldown bitene dek atlanır (içerik reddi değil).
@@ -255,15 +260,25 @@ class MuseumAPIClient:
                             diversity_reason,
                         )
 
+                    # Kaynak-çeşitlilik kilidi bir TERCİHTİR, kalite/hak kuralı
+                    # değildir. Adayı kaybetme; hiçbir kaynak kilidi kıramazsa
+                    # en yüksek puanlı adayı kullanıcı adayı olarak sakla.
+                    if diversity_reason == SOURCE_CONSECUTIVE_LIMIT:
+                        source_limit_blocked.append(artwork)
+                        break
+
+                    # Tür kilidi de aynı muameleye tabidir: döngüyü tek başına
+                    # öldüremez, ama gevşetme havuzunda TÜR nedeniyle elenenler
+                    # yer almaz — havuz yalnızca kaynak kilidine takılanları içerir.
+                    if diversity_reason == MEDIUM_CONSECUTIVE_LIMIT:
+                        if candidate_number + 1 < MAX_DIVERSITY_CANDIDATES_PER_SOURCE and not target_medium:
+                            posted_set.add_transient(artwork.id)
+                            continue
+                        break
+
                     can_try_alternative = (
                         candidate_number + 1 < MAX_DIVERSITY_CANDIDATES_PER_SOURCE
-                        and (
-                            diversity_reason == ARTIST_COOLDOWN
-                            or (
-                                diversity_reason == MEDIUM_CONSECUTIVE_LIMIT
-                                and not target_medium
-                            )
-                        )
+                        and diversity_reason == ARTIST_COOLDOWN
                     )
                     if can_try_alternative:
                         posted_set.add_transient(artwork.id)
@@ -286,6 +301,22 @@ class MuseumAPIClient:
                     run_stats[MEDIUM_CONSECUTIVE_LIMIT], run_stats["eligible"], artwork.id,
                 )
                 return artwork
+        if source_limit_blocked:
+            # Hiçbir kaynak çeşitlilik kilidini kıramadı: kural gevşetilir.
+            # Kilit bir estetik tercihtir; döngüyü hiç çalıştırmamaktan iyidir.
+            # En yüksek puanlı aday seçilir, kural çalıştırıldı diye RAPORLANIR.
+            fallback = max(source_limit_blocked, key=lambda art: art.score)
+            run_stats["source"] = fallback.museum
+            run_stats[SOURCE_LIMIT_RELAXED] += 1
+            self.last_run_stats = run_stats
+            self.scoring_telemetry.record_selected(fallback.museum, fallback.score)
+            self.health.log_summary()
+            logger.warning(
+                "diversity_relaxed reason=%s selected=%s score=%d "
+                "note=kural gevşetildi, aday kaynak çeşitliliği kuralını ihlal ediyor",
+                SOURCE_CONSECUTIVE_LIMIT, fallback.id, fallback.score,
+            )
+            return fallback
         self.last_run_stats = run_stats
         self.health.log_summary()
         logger.info(
