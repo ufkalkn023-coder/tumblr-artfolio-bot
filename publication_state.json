@@ -994,6 +994,20 @@
       "title": "Portrait of a Man",
       "tumblr_post_id": "827795238036946944"
     },
+    "cma:97197": {
+      "artist_key": "",
+      "artist_name": "Unknown Artist",
+      "artwork_id": "97197",
+      "error": "",
+      "medium_type": "Sculpture",
+      "museum": "cma",
+      "published_at": "2026-10-04T17:25:10.400135+00:00",
+      "reserved_at": "2026-10-04T17:25:09.176344+00:00",
+      "score": 85,
+      "status": "published",
+      "title": "Head of a Woman",
+      "tumblr_post_id": "829564869744410624"
+    },
     "met:206918": {
       "artist_key": "andrea briosco, called riccio",
       "artist_name": "Andrea Briosco, called Riccio",
