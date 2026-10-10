@@ -252,6 +252,20 @@
       "title": "Portrait of a Woman",
       "tumblr_post_id": "828408795113897984"
     },
+    "cma:125247": {
+      "artist_key": "peter paul rubens",
+      "artist_name": "Peter Paul Rubens",
+      "artwork_id": "125247",
+      "error": "",
+      "medium_type": "Painting",
+      "museum": "cma",
+      "published_at": "2026-10-10T12:49:13.834466+00:00",
+      "reserved_at": "2026-10-10T12:49:12.468615+00:00",
+      "score": 100,
+      "status": "published",
+      "title": "Portrait of Isabella Brant",
+      "tumblr_post_id": "830091090776457216"
+    },
     "cma:125949": {
       "artist_key": "françois boucher",
       "artist_name": "François Boucher",
