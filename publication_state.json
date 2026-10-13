@@ -266,6 +266,20 @@
       "title": "Coronation of the Virgin",
       "tumblr_post_id": "829473273492439040"
     },
+    "cma:124080": {
+      "artist_key": "thomas gainsborough",
+      "artist_name": "Thomas Gainsborough",
+      "artwork_id": "124080",
+      "error": "",
+      "medium_type": "Painting",
+      "museum": "cma",
+      "published_at": "2026-10-13T23:14:25.638016+00:00",
+      "reserved_at": "2026-10-13T23:14:24.844235+00:00",
+      "score": 90,
+      "status": "published",
+      "title": "Portrait of Mary Wise",
+      "tumblr_post_id": "830402215695073280"
+    },
     "cma:124092": {
       "artist_key": "gerard ter borch",
       "artist_name": "Gerard ter Borch",
