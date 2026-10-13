@@ -1204,6 +1204,20 @@
       "title": "Plaque",
       "tumblr_post_id": "830204143248523264"
     },
+    "cma:161771": {
+      "artist_key": "",
+      "artist_name": "Unknown Artist",
+      "artwork_id": "161771",
+      "error": "",
+      "medium_type": "Painting",
+      "museum": "cma",
+      "published_at": "2026-10-13T02:30:22.362173+00:00",
+      "reserved_at": "2026-10-13T02:30:21.537234+00:00",
+      "score": 85,
+      "status": "published",
+      "title": "Kausa Ragaputra of Malkos, from a Ragamala",
+      "tumblr_post_id": "830323946540892161"
+    },
     "cma:162322": {
       "artist_key": "georges-daniel de monfreid",
       "artist_name": "Georges-Daniel de Monfreid",
