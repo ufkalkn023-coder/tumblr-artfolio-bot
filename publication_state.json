@@ -1260,6 +1260,20 @@
       "title": "A Musical Company",
       "tumblr_post_id": "828098255664644096"
     },
+    "cma:159298": {
+      "artist_key": "",
+      "artist_name": "Unknown Artist",
+      "artwork_id": "159298",
+      "error": "",
+      "medium_type": "Sculpture",
+      "museum": "cma",
+      "published_at": "2026-10-15T18:59:51.608116+00:00",
+      "reserved_at": "2026-10-15T18:59:50.866027+00:00",
+      "score": 85,
+      "status": "published",
+      "title": "Statuette of Dionysos",
+      "tumblr_post_id": "830567393602469888"
+    },
     "cma:159309": {
       "artist_key": "joseph-marie vien",
       "artist_name": "Joseph-Marie Vien",
