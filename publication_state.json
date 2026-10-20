@@ -42,6 +42,20 @@
       "title": "Statuette of a Lion",
       "tumblr_post_id": "827918933937061888"
     },
+    "cma:101505": {
+      "artist_key": "",
+      "artist_name": "Unknown Artist",
+      "artwork_id": "101505",
+      "error": "",
+      "medium_type": "Sculpture",
+      "museum": "cma",
+      "published_at": "2026-10-20T23:45:33.064124+00:00",
+      "reserved_at": "2026-10-20T23:45:32.512387+00:00",
+      "score": 85,
+      "status": "published",
+      "title": "Transenna Post",
+      "tumblr_post_id": "831038352636755968"
+    },
     "cma:102361": {
       "artist_key": "michel colombe",
       "artist_name": "Michel Colombe",
