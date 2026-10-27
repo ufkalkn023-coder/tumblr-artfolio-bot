@@ -1904,6 +1904,20 @@
       "title": "The Trinity",
       "tumblr_post_id": "828276813590577152"
     },
+    "cma:160289": {
+      "artist_key": "john singer sargent",
+      "artist_name": "John Singer Sargent",
+      "artwork_id": "160289",
+      "error": "",
+      "medium_type": "Painting",
+      "museum": "cma",
+      "published_at": "2026-10-27T10:21:09.066701+00:00",
+      "reserved_at": "2026-10-27T10:21:08.163856+00:00",
+      "score": 100,
+      "status": "published",
+      "title": "Portrait of Lisa Colt Curtis",
+      "tumblr_post_id": "831621922842460160"
+    },
     "cma:160767": {
       "artist_key": "",
       "artist_name": "Unknown Artist",
