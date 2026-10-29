@@ -560,6 +560,20 @@
       "title": "Spring",
       "tumblr_post_id": "828204878386036736"
     },
+    "cma:129219": {
+      "artist_key": "carlo crivelli",
+      "artist_name": "Carlo Crivelli",
+      "artwork_id": "129219",
+      "error": "",
+      "medium_type": "Painting",
+      "museum": "cma",
+      "published_at": "2026-10-29T00:45:06.084445+00:00",
+      "reserved_at": "2026-10-29T00:45:05.375356+00:00",
+      "score": 90,
+      "status": "published",
+      "title": "Saint Nicholas of Bari",
+      "tumblr_post_id": "831766874752778240"
+    },
     "cma:129802": {
       "artist_key": "francesco guardi",
       "artist_name": "Francesco Guardi",
