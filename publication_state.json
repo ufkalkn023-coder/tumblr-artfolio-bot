@@ -798,6 +798,20 @@
       "title": "The Nativity",
       "tumblr_post_id": "831564494926954496"
     },
+    "cma:135382": {
+      "artist_key": "claude monet",
+      "artist_name": "Claude Monet",
+      "artwork_id": "135382",
+      "error": "",
+      "medium_type": "Painting",
+      "museum": "cma",
+      "published_at": "2026-10-30T23:35:39.735294+00:00",
+      "reserved_at": "2026-10-30T23:35:39.201557+00:00",
+      "score": 100,
+      "status": "published",
+      "title": "The Red Kerchief",
+      "tumblr_post_id": "831943700057915392"
+    },
     "cma:135428": {
       "artist_key": "lucas cranach",
       "artist_name": "Lucas Cranach",
