@@ -784,6 +784,20 @@
       "title": "Trikala Bhairava",
       "tumblr_post_id": "828128057627918336"
     },
+    "cma:135299": {
+      "artist_key": "vincent van gogh",
+      "artist_name": "Vincent van Gogh",
+      "artwork_id": "135299",
+      "error": "",
+      "medium_type": "Painting",
+      "museum": "cma",
+      "published_at": "2026-10-31T05:14:21.923244+00:00",
+      "reserved_at": "2026-10-31T05:14:21.127821+00:00",
+      "score": 100,
+      "status": "published",
+      "title": "Adeline Ravoux",
+      "tumblr_post_id": "831965009476190208"
+    },
     "cma:135311": {
       "artist_key": "gerard david",
       "artist_name": "Gerard David",
