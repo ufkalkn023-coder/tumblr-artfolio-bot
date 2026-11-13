@@ -1134,6 +1134,20 @@
       "title": "St. Francis Kneeling before Christ on the Cross",
       "tumblr_post_id": "830353701063540736"
     },
+    "cma:140149": {
+      "artist_key": "",
+      "artist_name": "",
+      "artwork_id": "140149",
+      "error": "Bad Request",
+      "medium_type": "",
+      "museum": "cma",
+      "published_at": "",
+      "reserved_at": "2026-11-13T07:45:11.176128+00:00",
+      "score": 90,
+      "status": "failed",
+      "title": "Panel from a Triptych: The Archangel Michael",
+      "tumblr_post_id": ""
+    },
     "cma:140408": {
       "artist_key": "john james audubon",
       "artist_name": "John James Audubon",
