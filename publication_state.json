@@ -3262,6 +3262,20 @@
       "title": "Maine Coast",
       "tumblr_post_id": "830185909919137792"
     },
+    "cma:94003": {
+      "artist_key": "",
+      "artist_name": "Unknown Artist",
+      "artwork_id": "94003",
+      "error": "",
+      "medium_type": "Sculpture",
+      "museum": "cma",
+      "published_at": "2026-11-14T10:11:29.833534+00:00",
+      "reserved_at": "2026-11-14T10:11:28.693844+00:00",
+      "score": 85,
+      "status": "published",
+      "title": "Statuette of Kneeling King",
+      "tumblr_post_id": "833252060587786240"
+    },
     "cma:94113": {
       "artist_key": "",
       "artist_name": "Unknown Artist",
