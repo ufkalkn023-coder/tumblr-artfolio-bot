@@ -2758,6 +2758,20 @@
       "title": "Plaque",
       "tumblr_post_id": "830204143248523264"
     },
+    "cma:160885": {
+      "artist_key": "frans hals",
+      "artist_name": "Frans Hals",
+      "artwork_id": "160885",
+      "error": "",
+      "medium_type": "Painting",
+      "museum": "cma",
+      "published_at": "2026-11-15T16:55:49.136820+00:00",
+      "reserved_at": "2026-11-15T16:55:48.153650+00:00",
+      "score": 90,
+      "status": "published",
+      "title": "Portrait of Tieleman Roosterman",
+      "tumblr_post_id": "833368095377817600"
+    },
     "cma:161771": {
       "artist_key": "",
       "artist_name": "Unknown Artist",
