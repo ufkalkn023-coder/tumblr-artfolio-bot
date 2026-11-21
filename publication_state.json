@@ -826,6 +826,20 @@
       "title": "Saint Nicholas of Bari",
       "tumblr_post_id": "831766874752778240"
     },
+    "cma:129386": {
+      "artist_key": "el greco",
+      "artist_name": "El Greco",
+      "artwork_id": "129386",
+      "error": "",
+      "medium_type": "Painting",
+      "museum": "cma",
+      "published_at": "2026-11-21T01:19:28.185549+00:00",
+      "reserved_at": "2026-11-21T01:19:27.304076+00:00",
+      "score": 100,
+      "status": "published",
+      "title": "Christ on the Cross",
+      "tumblr_post_id": "833852767283085312"
+    },
     "cma:129802": {
       "artist_key": "francesco guardi",
       "artist_name": "Francesco Guardi",
